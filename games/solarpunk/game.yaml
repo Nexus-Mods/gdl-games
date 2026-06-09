@@ -1,29 +1,215 @@
 gdl: 1
 
+# Solarpunk (rokaplay / Cyberwave) — Unreal Engine 5, IoStore paks.
+# Initial release: pak mods (Content/Paks/~mods) + whole-folder "root" mods.
+# UE4SS / LogicMods are intentionally out of scope until UE4SS support is verified
+# against this build.
+
 game:
   id: solarpunk
   name: Solarpunk
-  executable: solarpunk.exe
-  requiredFiles:
-    - solarpunk.exe
+  executable: Solarpunk.exe          # UE5 bootstrap launcher at the install root
+  requiredFiles: [Solarpunk.exe]
   logo: gameart.webp
+  nexusDomain: solarpunk
+  details:
+    steamAppId: 1805110
+    epicAppId: "408e96c974c54d478cb18296164dcbfe"   # Epic AppName/artifact (Windows)
+    supportsSymlinks: true
+    gameProjectFolder: Solarpunk
 
 stores:
-  steam: 0    # replace with the game's Steam app id
+  steam: "1805110"
+  # Epic value is the manifest AppName (Vortex matches IGameStoreEntry.appid == AppName).
+  epic: "408e96c974c54d478cb18296164dcbfe"
+  # Xbox value is the package Identity Name (Vortex matches the appsFolder key before '_').
+  # Store listing id is 9N8BRH7PGJMJ; package family is rokapublish.Solarpunk_6q4vfhsywtz4j.
+  # The xbox install path/exe layout is unverified — confirm on a Game Pass install.
+  xbox: "rokapublish.Solarpunk"
 
-modTypes: []     # add one entry per mod type the game supports
+context:
+  # On Xbox/Game Pass the project files sit at the install root; on Steam/Epic they
+  # live under the Solarpunk/ project folder.
+  gamePath:
+    storeBranch:
+      xbox: ${installPath}
+      default: ${installPath}/Solarpunk
 
-installers: []   # add installer rules
+  pakModsPath: ${gamePath}/Content/Paks/~mods
+  paksPath:    ${gamePath}/Content/Paks
+  contentPath: ${gamePath}/Content
 
-# Releasing requires a `nexus` block with real positive ids; GDL rejects 0/placeholder
-# values at build time, so it is intentionally omitted from this skeleton. Add it when
-# the game's Nexus mod page exists, e.g.:
+modTypes:
+  - { id: solarpunk-pak,           name: "Paks (~mods)",       path: "${pakModsPath}" }
+  - { id: solarpunk-pakalt,        name: "Paks (no ~mods)",    path: "${paksPath}" }
+  - { id: solarpunk-contentfolder, name: "Content folder",     path: "${gamePath}" }
+  - { id: solarpunk-root,          name: "Root (game folder)", path: "${installPath}" }
+
+installers:
+  # --- Priority 25: Root — archive carries game-relative top-level dirs ---
+  - id: root
+    priority: 25
+    when:
+      any:
+        - { hasFile: "**/Solarpunk/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}"
+    modType: solarpunk-root
+
+  # --- Priority 26: Content/ or Config/ at the archive root → project folder ---
+  - id: content-folder
+    priority: 26
+    when:
+      any:
+        - { hasFile: "Content/**" }
+        - { hasFile: "Config/**" }
+    unless:
+      any:
+        - { hasFile: "**/Solarpunk/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${gamePath}"
+    modType: solarpunk-contentfolder
+
+  # --- Priority 28: A Paks/ folder bundled in the archive (not ~mods) → Content/Paks ---
+  - id: pak-alt
+    priority: 28
+    when:
+      all:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Paks/**" }
+    unless:
+      any:
+        - { hasFile: "**/~mods/**" }
+        - { hasFile: "**/Solarpunk/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/Paks/"
+    take: self
+    placeAt: "${contentPath}"
+    modType: solarpunk-pakalt
+
+  # --- Priority 29: IO Store mod (utoc/ucas without a .pak) → ~mods ---
+  - id: pak-iostore
+    priority: 29
+    when: { hasFile: "**/*.utoc" }
+    unless:
+      any:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Solarpunk/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+    anchor: "**/*.utoc"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: solarpunk-pak
+
+  # --- Priority 30: Default pak mod → flatten into ~mods ---
+  - id: pak
+    priority: 30
+    when: { hasFile: "**/*.pak" }
+    unless:
+      any:
+        - { hasFile: "**/Solarpunk/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+    anchor: "**/*.pak"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: solarpunk-pak
+
+setup:
+  ensureDirs:
+    - ${pakModsPath}
+
+toolbarActions:
+  - id: open-nexus-page
+    title: Open Nexus Page
+    priority: 200
+    target: { openUrl: "https://www.nexusmods.com/solarpunk" }
+
+# Publishing to Nexus requires real positive ids; add this block once the Vortex
+# extension's Nexus mod page exists (GDL rejects 0/placeholder nexus ids at build):
 #
 # nexus:
-#   modId: 1234           # the mod-page id from your nexusmods.com URL (/mods/1234 → 1234)
-#   fileGroupId: 5678     # the file-group id Nexus shows on the upload page
+#   modId: 0
+#   fileGroupId: 0
 #   displayName: Solarpunk Support for Vortex
 
 tests:
   corpus: off
-  cases: []
+  cases:
+    - name: "pak: single pak file flattened to ~mods"
+      archive:
+        - SomeMod/Cool.pak
+      expect:
+        matched: pak
+        modType: solarpunk-pak
+        plan:
+          - ${pakModsPath}/Cool.pak
+
+    - name: "pak: pak+ucas+utoc triplet flattened"
+      archive:
+        - SomeMod/files/x_P.pak
+        - SomeMod/files/x_P.ucas
+        - SomeMod/files/x_P.utoc
+      expect:
+        matched: pak
+        modType: solarpunk-pak
+        plan:
+          - ${pakModsPath}/x_P.pak
+          - ${pakModsPath}/x_P.ucas
+          - ${pakModsPath}/x_P.utoc
+
+    - name: "pak-iostore: utoc+ucas without a pak"
+      archive:
+        - SomeMod/x_P.utoc
+        - SomeMod/x_P.ucas
+      expect:
+        matched: pak-iostore
+        modType: solarpunk-pak
+        plan:
+          - ${pakModsPath}/x_P.utoc
+          - ${pakModsPath}/x_P.ucas
+
+    - name: "pak-alt: bundled Paks/ folder → Content/Paks"
+      archive:
+        - mod/Paks/sub/x.pak
+        - mod/Paks/sub/x.ucas
+        - mod/Paks/sub/x.utoc
+      expect:
+        matched: pak-alt
+        modType: solarpunk-pakalt
+        plan:
+          - ${contentPath}/Paks/sub/x.pak
+          - ${contentPath}/Paks/sub/x.ucas
+          - ${contentPath}/Paks/sub/x.utoc
+
+    - name: "content-folder: Content/ at archive root"
+      archive:
+        - Content/Foo.uasset
+        - Content/Bar.uexp
+      expect:
+        matched: content-folder
+        modType: solarpunk-contentfolder
+        plan:
+          - ${gamePath}/Content/Foo.uasset
+          - ${gamePath}/Content/Bar.uexp
+
+    - name: "root: Solarpunk + Engine segments"
+      archive:
+        - Solarpunk/Content/Paks/foo.pak
+        - Engine/Content/bar.uasset
+      expect:
+        matched: root
+        modType: solarpunk-root
+        plan:
+          - ${installPath}/Solarpunk/Content/Paks/foo.pak
+          - ${installPath}/Engine/Content/bar.uasset

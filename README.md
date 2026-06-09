@@ -77,6 +77,16 @@ mkdir -p games/<id> && cd games/<id>
 node ../../gdl/dist/cli.js init <id> -n "Human Friendly Name"
 ```
 
-Then adapt the generated `package.json` so its scripts call `../../gdl/dist/cli.js` (not
-`gdl/dist/cli.js`), delete the generated `.gitignore` / `.github/` (the repo root provides those),
-add a minimal `vitest.config.ts`, and fill in `game.yaml`. Add `<id>` to the CI build matrix.
+Then:
+
+- Adapt the generated `package.json` so its scripts call `../../gdl/dist/cli.js` (not
+  `gdl/dist/cli.js`).
+- Delete the generated `.gitignore` / `.github/` — the repo root provides those.
+- Copy `games/solarpunk/vitest.config.ts`. **It is not optional:** GDL's generated test file
+  imports its runtime via a single-game-layout path (`@gdl/runtime` and a relative
+  `../gdl/src/runtime/index.js`), so the config must alias both to `../../gdl/src/runtime/index.ts`.
+  Without it, `pnpm test` fails to resolve the runtime.
+- Fill in `game.yaml` (and add a `nexus:` block only once the extension's Nexus page exists —
+  GDL rejects `0`/placeholder nexus ids at build time).
+
+The bulk `pnpm build/test/package` scripts and the CI matrix pick up `games/*` automatically.
