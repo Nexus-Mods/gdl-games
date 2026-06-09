@@ -253,13 +253,10 @@ toolbarActions:
     priority: 201
     target: { openUrl: "https://www.nexusmods.com/solarpunk" }
 
-# Publishing to Nexus requires real positive ids; add this block once the Vortex
-# extension's Nexus mod page exists (GDL rejects 0/placeholder nexus ids at build):
-#
-# nexus:
-#   modId: 0
-#   fileGroupId: 0
-#   displayName: Solarpunk Support for Vortex
+nexus:
+  modId: 1975            # nexusmods.com/site/mods/1975 (the Vortex extension page)
+  fileGroupId: 7517603
+  displayName: Solarpunk Support for Vortex
 
 # Corpus validators: assertions checked against real Nexus archives via
 # `gdl test:corpus --fetch` (needs NEXUS_API_KEY). They guard the routing of the
