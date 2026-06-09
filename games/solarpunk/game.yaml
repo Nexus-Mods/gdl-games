@@ -376,6 +376,22 @@ tests:
           - ${pakModsPath}/x_P.ucas
           - ${pakModsPath}/x_P.utoc
 
+    # Exact real-world shape of "Better Stacks" (mod 3): a .pak alongside .utoc/.ucas
+    # must route to `pak` (not `pak-iostore`, whose `unless: **/*.pak` excludes it)
+    # and flatten the wrapping folder into ~mods.
+    - name: "pak: Better Stacks (real archive — pak wins over pak-iostore)"
+      archive:
+        - Better Stacks/0_BetterStacks_P.pak
+        - Better Stacks/0_BetterStacks_P.ucas
+        - Better Stacks/0_BetterStacks_P.utoc
+      expect:
+        matched: pak
+        modType: solarpunk-pak
+        plan:
+          - ${pakModsPath}/0_BetterStacks_P.pak
+          - ${pakModsPath}/0_BetterStacks_P.ucas
+          - ${pakModsPath}/0_BetterStacks_P.utoc
+
     - name: "pak-iostore: utoc+ucas without a pak"
       archive:
         - SomeMod/x_P.utoc
