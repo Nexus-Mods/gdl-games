@@ -1,0 +1,104 @@
+gdl: 1
+version: 1.0.0
+
+game:
+  id: 007firstlight
+  name: "007: First Light"
+  executable: Retail/007FirstLight.exe
+  requiredFiles:
+    - Retail/007FirstLight.exe
+  logo: gameart.webp
+  nexusDomain: 007firstlight
+
+stores:
+  steam: 3768760
+
+context:
+  runtimeRoot: ${installPath}/Runtime
+
+modTypes:
+  - id: rpkg-patch
+    name: RPKG Patch (Runtime)
+    path: "${runtimeRoot}"
+
+  - id: retail-overlay
+    name: Retail Overlay
+    path: "${installPath}/Retail"
+
+  - id: root
+    name: Root (game folder)
+    path: "${installPath}"
+
+installers:
+  - id: rpkg-patch
+    priority: 50
+    when: { hasFile: "**/*.rpkg" }
+    anchor: "**/*.rpkg"
+    take: parent
+    placeAt: "${runtimeRoot}"
+    modType: rpkg-patch
+
+  - id: retail-overlay
+    priority: 30
+    when:
+      any:
+        - { hasFile: "**/*.dll" }
+        - { hasFile: "**/*.ini" }
+        - { hasFile: "**/*.cfg" }
+    unless: { hasFile: "**/*.rpkg" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}/Retail"
+    modType: retail-overlay
+
+  - id: root
+    priority: 10
+    when: { hasFile: "**/*" }
+    unless:
+      any:
+        - { hasFile: "**/*.rpkg" }
+        - { hasFile: "**/*.dll" }
+        - { hasFile: "**/*.ini" }
+        - { hasFile: "**/*.cfg" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}"
+    modType: root
+
+nexus:
+  modId: 1918
+  fileGroupId: 7465358
+  displayName: 007 First Light Support for Vortex
+
+tests:
+  corpus: nexus
+  cases:
+    - name: rpkg patch file goes to Runtime
+      archive:
+        - chunk0patch1.rpkg
+      expect:
+        matched: rpkg-patch
+        modType: rpkg-patch
+
+    - name: rpkg patch in subfolder still lands in Runtime
+      archive:
+        - MyMod/chunk0patch2.rpkg
+      expect:
+        matched: rpkg-patch
+        modType: rpkg-patch
+
+    - name: dll overlay goes to Retail
+      archive:
+        - dinput8.dll
+        - mods.ini
+      expect:
+        matched: retail-overlay
+        modType: retail-overlay
+
+    - name: generic files fall through to root
+      archive:
+        - readme.txt
+        - docs/guide.pdf
+      expect:
+        matched: root
+        modType: root

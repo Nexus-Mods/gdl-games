@@ -1,0 +1,511 @@
+gdl: 1
+version: 1.1.0
+
+game:
+  id: subnautica2
+  name: Subnautica 2
+  executable: Subnautica2.exe
+  requiredFiles: [Subnautica2.exe]
+  logo: gameart.webp
+  nexusDomain: subnautica2
+  details:
+    steamAppId: 1962700
+    epicAppId: "22bfc34d90b64054809542014fc9eb32"
+    supportsSymlinks: true
+    gameProjectFolder: Subnautica2
+    ignoreConflicts: [enabled.txt, mods.txt, UE4SS-settings.ini]
+    ignoreDeploy: [mods.txt]
+
+stores:
+  steam: "1962700"
+  epic: "22bfc34d90b64054809542014fc9eb32"
+
+context:
+  arch:
+    storeBranch:
+      xbox: WinGDK
+      default: Win64
+
+  gamePath:
+    storeBranch:
+      xbox: ${installPath}
+      default: ${installPath}/Subnautica2
+
+  pakModsPath: ${gamePath}/Content/Paks/~mods
+  logicModsPath: ${gamePath}/Content/Paks/LogicMods
+  paksPath: ${gamePath}/Content/Paks
+  contentPath: ${gamePath}/Content
+
+  ue4ssInjectorPath: ${gamePath}/Binaries/${arch}
+  ue4ssRootPath: ${gamePath}/Binaries/${arch}/ue4ss
+  ue4ssModsPath: ${gamePath}/Binaries/${arch}/ue4ss/Mods
+
+modTypes:
+  - { id: subnautica2-pak,            name: "Paks (~mods)",             path: "${pakModsPath}" }
+  - { id: subnautica2-logicmods,      name: "LogicMods (Blueprint paks)", path: "${logicModsPath}" }
+  - { id: subnautica2-ue4ss,          name: "UE4SS (Lua scripts)",      path: "${ue4ssModsPath}" }
+  - { id: subnautica2-ue4ss-injector, name: "UE4SS Injector",           path: "${ue4ssInjectorPath}" }
+  - { id: subnautica2-root,           name: "Root (game folder)",       path: "${installPath}" }
+  - { id: subnautica2-contentfolder,  name: "Content folder",           path: "${gamePath}" }
+  - { id: subnautica2-pakalt,         name: "Paks (no ~mods)",          path: "${paksPath}" }
+
+installers:
+  # --- Priority 15: UE4SS Injector (dwmapi.dll, xinput1_4.dll, UE4SS-settings.ini) ---
+  - id: ue4ss-injector
+    priority: 15
+    when: { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}"
+    take: parent
+    placeAt: "${ue4ssInjectorPath}"
+    modType: subnautica2-ue4ss-injector
+
+  # --- Priority 20: LogicMods (Blueprint paks under LogicMods/) ---
+  - id: logicmods
+    priority: 20
+    when: { hasFile: "**/LogicMods/**" }
+    anchor: "**/LogicMods/"
+    take: self
+    placeAt: "${paksPath}"
+    modType: subnautica2-logicmods
+
+  # --- Priority 22: UE4SS Lua (Scripts/*.lua present) ---
+  - id: ue4ss-lua
+    priority: 22
+    when: { hasFile: "**/Scripts/*.lua" }
+    unless: { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/Scripts/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: subnautica2-ue4ss
+
+  # --- Priority 23: UE4SS Lua (enabled.txt only, no Scripts/*.lua) ---
+  - id: ue4ss-lua-enabled
+    priority: 23
+    when: { hasFile: "**/enabled.txt" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/enabled.txt"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: subnautica2-ue4ss
+
+  # --- Priority 24: UE4SS Lua (bare .lua files, no Scripts/ directory) ---
+  # Some mods put .lua files directly in the mod folder without a Scripts/ subdirectory.
+  - id: ue4ss-lua-bare
+    priority: 24
+    when: { hasFile: "**/*.lua" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: subnautica2-ue4ss
+
+  # --- Priority 25: Root (Subnautica2/, Engine/, or Binaries/ segments) ---
+  - id: root
+    priority: 25
+    when:
+      any:
+        - { hasFile: "**/Subnautica2/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    unless:
+      any:
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}"
+    modType: subnautica2-root
+
+  # --- Priority 26: Content folder (Content/ or Config/ at archive root) ---
+  - id: content-folder
+    priority: 26
+    when:
+      any:
+        - { hasFile: "Content/**" }
+        - { hasFile: "Config/**" }
+    unless:
+      any:
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${gamePath}"
+    modType: subnautica2-contentfolder
+
+  # --- Priority 28: Pak alt (Paks/ folder without ~mods) ---
+  - id: pak-alt
+    priority: 28
+    when:
+      all:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Paks/**" }
+    unless:
+      any:
+        - { hasFile: "**/~mods/**" }
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+    anchor: "**/Paks/"
+    take: self
+    placeAt: "${contentPath}"
+    modType: subnautica2-pakalt
+
+  # --- Priority 29: IO Store only (utoc+ucas without pak) ---
+  - id: pak-iostore
+    priority: 29
+    when: { hasFile: "**/*.utoc" }
+    unless:
+      any:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/Subnautica2/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+    anchor: "**/*.utoc"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: subnautica2-pak
+
+  # --- Priority 30: Pak (default, flatten into ~mods) ---
+  - id: pak
+    priority: 30
+    when: { hasFile: "**/*.pak" }
+    unless:
+      any:
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/Subnautica2/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+    anchor: "**/*.pak"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: subnautica2-pak
+
+discovery:
+  version: { hook: detectGameVersion }
+
+setup:
+  ensureDirs:
+    - ${pakModsPath}
+    - ${logicModsPath}
+    - ${ue4ssModsPath}
+
+events:
+  did-deploy: { hook: regenerateModsTxt }
+
+toolbarActions:
+  - id: open-ue4ss-settings
+    title: Open UE4SS Settings INI
+    priority: 200
+    target: { openFile: "${ue4ssRootPath}/UE4SS-settings.ini" }
+
+  - id: open-mods-txt
+    title: Open UE4SS mods.txt
+    priority: 201
+    target: { openFile: "${ue4ssModsPath}/mods.txt" }
+
+  - id: open-nexus-page
+    title: Open Nexus Page
+    priority: 202
+    target: { openUrl: "https://www.nexusmods.com/subnautica2" }
+
+nexus:
+  modId: 1091
+  fileGroupId: 7418978
+  displayName: Subnautica 2 Support for Vortex
+
+tests:
+  corpus: nexus
+  cases:
+    # --- UE4SS Injector ---
+    - name: "injector: dwmapi.dll at archive root"
+      archive:
+        - dwmapi.dll
+        - UE4SS.dll
+      expect:
+        matched: ue4ss-injector
+        modType: subnautica2-ue4ss-injector
+        plan:
+          - ${ue4ssInjectorPath}/dwmapi.dll
+          - ${ue4ssInjectorPath}/UE4SS.dll
+
+    - name: "injector: marker in subfolder strips wrapper"
+      archive:
+        - ue4ss/dwmapi.dll
+        - ue4ss/UE4SS.dll
+        - ue4ss/UE4SS-settings.ini
+      expect:
+        matched: ue4ss-injector
+        modType: subnautica2-ue4ss-injector
+        plan:
+          - ${ue4ssInjectorPath}/dwmapi.dll
+          - ${ue4ssInjectorPath}/UE4SS.dll
+          - ${ue4ssInjectorPath}/UE4SS-settings.ini
+
+    - name: "injector: case-insensitive marker"
+      archive:
+        - Pack/DWMAPI.DLL
+      expect:
+        matched: ue4ss-injector
+        modType: subnautica2-ue4ss-injector
+
+    - name: "injector: xinput1_4.dll (Xbox marker)"
+      archive:
+        - xinput1_4.dll
+        - UE4SS.dll
+      expect:
+        matched: ue4ss-injector
+        modType: subnautica2-ue4ss-injector
+
+    # --- LogicMods ---
+    - name: "logicmods: paks under LogicMods/ folder"
+      archive:
+        - Pack/LogicMods/BPFolder/X.pak
+        - Pack/LogicMods/Y.pak
+      expect:
+        matched: logicmods
+        modType: subnautica2-logicmods
+        plan:
+          - ${paksPath}/LogicMods/BPFolder/X.pak
+          - ${paksPath}/LogicMods/Y.pak
+
+    - name: "logicmods: case-insensitive"
+      archive:
+        - Outer/logicmods/Inner.pak
+      expect:
+        matched: logicmods
+        modType: subnautica2-logicmods
+
+    # --- UE4SS Lua (Scripts) ---
+    - name: "ue4ss: lua mod with Scripts folder"
+      archive:
+        - MyMod/Scripts/main.lua
+        - MyMod/Scripts/util.lua
+      expect:
+        matched: ue4ss-lua
+        modType: subnautica2-ue4ss
+        plan:
+          - ${ue4ssModsPath}/MyMod/Scripts/main.lua
+          - ${ue4ssModsPath}/MyMod/Scripts/util.lua
+
+    - name: "ue4ss: wrapped mod strips outer directory"
+      archive:
+        - wrapper/MyMod/Scripts/main.lua
+        - wrapper/MyMod/enabled.txt
+      expect:
+        matched: ue4ss-lua
+        modType: subnautica2-ue4ss
+        plan:
+          - ${ue4ssModsPath}/MyMod/Scripts/main.lua
+          - ${ue4ssModsPath}/MyMod/enabled.txt
+
+    - name: "ue4ss: deep game-relative path collapsed"
+      archive:
+        - Subnautica2/Binaries/Win64/ue4ss/Mods/CoolMod/Scripts/main.lua
+        - Subnautica2/Binaries/Win64/ue4ss/Mods/CoolMod/enabled.txt
+      expect:
+        matched: ue4ss-lua
+        modType: subnautica2-ue4ss
+        plan:
+          - ${ue4ssModsPath}/CoolMod/Scripts/main.lua
+          - ${ue4ssModsPath}/CoolMod/enabled.txt
+
+    - name: "ue4ss: lua mod with extra asset files"
+      archive:
+        - MyMod/Scripts/main.lua
+        - MyMod/shared/config.json
+        - MyMod/enabled.txt
+      expect:
+        matched: ue4ss-lua
+        modType: subnautica2-ue4ss
+        plan:
+          - ${ue4ssModsPath}/MyMod/Scripts/main.lua
+          - ${ue4ssModsPath}/MyMod/shared/config.json
+          - ${ue4ssModsPath}/MyMod/enabled.txt
+
+    # --- UE4SS Lua (enabled.txt only) ---
+    - name: "ue4ss-enabled: enabled.txt mod without Scripts"
+      archive:
+        - MyLuaMod/enabled.txt
+        - MyLuaMod/data.json
+      expect:
+        matched: ue4ss-lua-enabled
+        modType: subnautica2-ue4ss
+        plan:
+          - ${ue4ssModsPath}/MyLuaMod/enabled.txt
+          - ${ue4ssModsPath}/MyLuaMod/data.json
+
+    # --- UE4SS Lua (bare .lua) ---
+    - name: "ue4ss-bare: lua files without Scripts/ directory"
+      archive:
+        - FishMod/main.lua
+        - FishMod/config.lua
+        - FishMod/physics.lua
+      expect:
+        matched: ue4ss-lua-bare
+        modType: subnautica2-ue4ss
+        plan:
+          - ${ue4ssModsPath}/FishMod/main.lua
+          - ${ue4ssModsPath}/FishMod/config.lua
+          - ${ue4ssModsPath}/FishMod/physics.lua
+
+    # --- Root ---
+    - name: "root: Subnautica2 + Engine segments"
+      archive:
+        - Subnautica2/Content/Paks/foo.pak
+        - Engine/Content/bar.uasset
+      expect:
+        matched: root
+        modType: subnautica2-root
+        plan:
+          - ${installPath}/Subnautica2/Content/Paks/foo.pak
+          - ${installPath}/Engine/Content/bar.uasset
+
+    - name: "root: Binaries segment"
+      archive:
+        - Binaries/Win64/mod.dll
+      expect:
+        matched: root
+        modType: subnautica2-root
+        plan:
+          - ${installPath}/Binaries/Win64/mod.dll
+
+    # --- Content Folder ---
+    - name: "content-folder: Content/ at archive root"
+      archive:
+        - Content/Foo.uasset
+        - Content/Bar.uexp
+      expect:
+        matched: content-folder
+        modType: subnautica2-contentfolder
+        plan:
+          - ${gamePath}/Content/Foo.uasset
+          - ${gamePath}/Content/Bar.uexp
+
+    - name: "content-folder: Config/ at archive root"
+      archive:
+        - Config/settings.ini
+      expect:
+        matched: content-folder
+        modType: subnautica2-contentfolder
+        plan:
+          - ${gamePath}/Config/settings.ini
+
+    # --- Pak Alt ---
+    - name: "pak-alt: Paks/ folder without ~mods"
+      archive:
+        - mod/Paks/sub/x.pak
+        - mod/Paks/sub/x.ucas
+        - mod/Paks/sub/x.utoc
+      expect:
+        matched: pak-alt
+        modType: subnautica2-pakalt
+        plan:
+          - ${contentPath}/Paks/sub/x.pak
+          - ${contentPath}/Paks/sub/x.ucas
+          - ${contentPath}/Paks/sub/x.utoc
+
+    # --- IO Store Only ---
+    - name: "pak-iostore: utoc+ucas without pak"
+      archive:
+        - SomeMod/x_P.utoc
+        - SomeMod/x_P.ucas
+      expect:
+        matched: pak-iostore
+        modType: subnautica2-pak
+        plan:
+          - ${pakModsPath}/x_P.utoc
+          - ${pakModsPath}/x_P.ucas
+
+    # --- Pak (default) ---
+    - name: "pak: single pak file"
+      archive:
+        - SomeMod/Cool.pak
+      expect:
+        matched: pak
+        modType: subnautica2-pak
+        plan:
+          - ${pakModsPath}/Cool.pak
+
+    - name: "pak: pak+ucas+utoc triplet flattened"
+      archive:
+        - SomeMod/files/x_P.pak
+        - SomeMod/files/x_P.ucas
+        - SomeMod/files/x_P.utoc
+      expect:
+        matched: pak
+        modType: subnautica2-pak
+        plan:
+          - ${pakModsPath}/x_P.pak
+          - ${pakModsPath}/x_P.ucas
+          - ${pakModsPath}/x_P.utoc
+
+    - name: "pak: deeply nested pak flattened to basename"
+      archive:
+        - a/b/c/d/MyMod.pak
+      expect:
+        matched: pak
+        modType: subnautica2-pak
+        plan:
+          - ${pakModsPath}/MyMod.pak
+
+    # --- Priority / losesTo scenarios ---
+    - name: "pak loses to logicmods"
+      archive:
+        - Outer/LogicMods/Inner/X.pak
+      expect:
+        matched: logicmods
+        modType: subnautica2-logicmods
+
+    - name: "pak loses to ue4ss-lua"
+      archive:
+        - Outer/Cool.pak
+        - Outer/Scripts/main.lua
+      expect:
+        matched: ue4ss-lua
+        modType: subnautica2-ue4ss
+
+    - name: "content-folder loses to logicmods"
+      archive:
+        - Content/Paks/LogicMods/X.pak
+      expect:
+        matched: logicmods
+
+validators:
+  - id: logicmods-validator
+    name: Archives with LogicMods should match logicmods installer
+    when: { hasFile: "**/LogicMods/**/*.pak" }
+    assert:
+      matched: logicmods
+
+  - id: ue4ss-lua-validator
+    name: Archives with Scripts/*.lua should match ue4ss-lua
+    when:
+      all:
+        - { hasFile: "**/Scripts/*.lua" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    assert:
+      matched: ue4ss-lua
+
+  - id: injector-validator
+    name: Archives with injector markers should match ue4ss-injector
+    when: { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    assert:
+      matched: ue4ss-injector

@@ -1,0 +1,147 @@
+gdl: 1
+version: 1.2.0
+
+game:
+  id: paralives
+  name: Paralives
+  executable: Paralives.exe
+  requiredFiles:
+    - Paralives.exe
+  logo: gameart.webp
+  nexusDomain: paralives
+
+discovery:
+  version:
+    file: "${installPath}/Main.mod/Settings/GameVersion.setting"
+    regex: "=VersionPrefix:(\\d+\\.\\d+\\.\\d+)"
+
+stores:
+  steam: 1118520
+
+context:
+  localModsPath: "${appDataLocalLow}/Paralives/Paralives"
+
+modTypes:
+  - id: paralives-mod
+    name: Paralives Mod
+    path: "${localModsPath}"
+  - id: paralives-overlay
+    name: Paralives Overlay
+    path: "${installPath}"
+
+installers:
+  # .mod folders (contain .mod.meta) → LocalLow
+  - id: paralives-mod
+    priority: 80
+    when: { hasFile: "**/*.mod.meta" }
+    anchor: "**/*.mod.meta"
+    take: archive-root
+    placeAt: "."
+    modType: paralives-mod
+
+  # Loose .setting files without a .mod wrapper → Main.mod/Settings in install dir.
+  # These override base-game settings (e.g. disabling the censor effect).
+  - id: paralives-settings
+    priority: 85
+    when:
+      all:
+        - { hasFile: "**/*.setting" }
+        - not: { hasFile: "**/*.mod.meta" }
+    anchor: "**/*.setting"
+    take: archive-root
+    placeAt: "Main.mod/Settings"
+    modType: paralives-overlay
+
+  # Everything else → install dir overlay (catch-all)
+  - id: paralives-overlay
+    priority: 90
+    when: { hasFile: "**/*" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "."
+    modType: paralives-overlay
+
+validators:
+  - id: mod-folder-to-locallow
+    name: "Archives with .mod.meta are Paralives mod packages and route to LocalLow"
+    when: { hasFile: "**/*.mod.meta" }
+    assert:
+      matched: paralives-mod
+      modType: paralives-mod
+
+  - id: settings-override-to-main-mod
+    name: "Bare .setting files (no .mod wrapper) override base-game settings in Main.mod/Settings"
+    when:
+      all:
+        - { hasFile: "**/*.setting" }
+        - not: { hasFile: "**/*.mod.meta" }
+    assert:
+      matched: paralives-settings
+
+  - id: loose-files-to-overlay
+    name: "Multi-file archives without .mod.meta or .setting files overlay the install dir"
+    when:
+      all:
+        - { hasFiles: ["**/*", "**/*/*"] }
+        - not: { hasFile: "**/*.mod.meta" }
+        - not: { hasFile: "**/*.setting" }
+    assert:
+      matched: paralives-overlay
+      modType: paralives-overlay
+
+  # Known limitation: bare plugin DLLs (BepInEx/MelonLoader) can't be auto-routed
+  # to the correct subfolder without metadata. Mod authors should package with
+  # folder structure (e.g. BepInEx/plugins/Foo.dll or Mods/Foo.dll).
+  # For now these land at the install root via the catch-all overlay.
+
+nexus:
+  modId: 1917
+  fileGroupId: 7446440
+  displayName: Paralives Support for Vortex
+
+tests:
+  corpus: nexus
+  cases:
+    - name: mod folder with .mod.meta goes to LocalLow
+      archive:
+        - CustomFurniture.mod/CustomFurniture.mod.meta
+        - CustomFurniture.mod/Furniture/Chair/Chair.asset
+        - CustomFurniture.mod/Furniture/Chair/Chair.asset.meta
+      expect:
+        matched: paralives-mod
+        modType: paralives-mod
+        plan:
+          - ./CustomFurniture.mod/CustomFurniture.mod.meta
+          - ./CustomFurniture.mod/Furniture/Chair/Chair.asset
+          - ./CustomFurniture.mod/Furniture/Chair/Chair.asset.meta
+
+    - name: bare setting files go to Main.mod/Settings
+      archive:
+        - DisableWeather.setting
+        - DisableWeather.setting.meta
+      expect:
+        matched: paralives-settings
+        modType: paralives-overlay
+        plan:
+          - Main.mod/Settings/DisableWeather.setting
+          - Main.mod/Settings/DisableWeather.setting.meta
+
+    - name: loose file overlay drops to install root
+      archive:
+        - MyMod/textures/foo.png
+        - MyMod/readme.txt
+      expect:
+        matched: paralives-overlay
+        modType: paralives-overlay
+        plan:
+          - ./MyMod/textures/foo.png
+          - ./MyMod/readme.txt
+
+    - name: nested archive root passes through unchanged
+      archive:
+        - wrapper/MyMod/data.bin
+      expect:
+        matched: paralives-overlay
+        modType: paralives-overlay
+        plan:
+          - ./wrapper/MyMod/data.bin
