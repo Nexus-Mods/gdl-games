@@ -48,16 +48,24 @@ pnpm test:corpus  # nx run-many -t test-corpus — installer rules vs cached Nex
 ```
 
 Nx caches each target by `game.yaml` + `src/**` + `gameart.webp` + the gdl toolchain commit, so
-unchanged games are restored from cache. Use `pnpm affected` (`nx affected`) to act only on games
-touched by your changes, e.g. `nx affected -t build test`.
+unchanged games are restored from cache. Use `pnpm affected` to act only on games touched by your
+changes, e.g. `pnpm nx affected -t build test`.
 
 ## Working with a single game
 
+Nx is a local dependency, so run it via `pnpm` (or `npx nx` / `pnpm exec nx`). Bare `nx ...` only
+works if Nx is installed globally.
+
 ```sh
-nx run solarpunk:build
-nx run solarpunk:test
-nx run solarpunk:package
+pnpm nx run solarpunk:build
+pnpm nx run solarpunk:test
+pnpm nx run solarpunk:package
+pnpm nx run solarpunk:test-corpus              # corpus vs cached manifests
+pnpm nx run solarpunk:test-corpus -- --fetch   # fetch fresh from Nexus (needs NEXUS_API_KEY)
 ```
+
+The Nx target is `test-corpus` (hyphen) because Nx target names can't contain `:` (it separates
+`project:target`); the underlying gdl CLI subcommand is still `test:corpus`.
 
 Or from inside the game folder, call the shared toolchain directly (bypassing Nx):
 
@@ -70,10 +78,16 @@ node ../../gdl/dist/cli.js test:corpus --fetch   # needs NEXUS_API_KEY
 
 ## Corpus testing (local)
 
-`gdl test:corpus --fetch` pulls every published mod's file-listing for the game's `nexusDomain`
-from the Nexus API into `games/<id>/tests/cache/` (git-ignored) and runs the installer rules +
-`validators` against them. It needs a `NEXUS_API_KEY` env var and is a **local** check — it is not
-wired into CI.
+Corpus testing pulls every published mod's file-listing for a game's `nexusDomain` from the Nexus
+API into `games/<id>/tests/cache/` (git-ignored) and runs the installer rules + `validators`
+against them. It needs a `NEXUS_API_KEY` env var and is a **local** check — it is not wired into CI.
+
+```sh
+pnpm nx run solarpunk:test-corpus -- --fetch   # one game: fetch fresh, then check
+pnpm test:corpus                               # all games: check against cached manifests
+```
+
+Or run it raw from inside the game folder: `node ../../gdl/dist/cli.js test:corpus --fetch`.
 
 ## Releasing
 
