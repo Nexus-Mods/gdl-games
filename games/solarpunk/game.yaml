@@ -6,6 +6,7 @@ game:
   executable: solarpunk.exe
   requiredFiles:
     - solarpunk.exe
+  logo: gameart.webp
 
 stores:
   steam: 0    # replace with the game's Steam app id
