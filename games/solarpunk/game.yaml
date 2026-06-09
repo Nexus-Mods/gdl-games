@@ -1,9 +1,9 @@
 gdl: 1
 
-# Solarpunk (rokaplay / Cyberwave) — Unreal Engine 5, IoStore paks.
-# Initial release: pak mods (Content/Paks/~mods) + whole-folder "root" mods.
-# UE4SS / LogicMods are intentionally out of scope until UE4SS support is verified
-# against this build.
+# Solarpunk (rokaplay / Cyberwave) — Unreal Engine 5 (5.7.x), IoStore paks.
+# Supports: pak mods (Content/Paks/~mods), LogicMods, UE4SS (loader + Lua mods),
+# ReShade presets, loose native DLL plugins, and whole-folder "root" mods.
+# UE4SS is known to run on this build (a pre-patched UE4SS v3.0.1 ships on Nexus).
 
 game:
   id: solarpunk
@@ -17,6 +17,7 @@ game:
     epicAppId: "408e96c974c54d478cb18296164dcbfe"   # Epic AppName/artifact (Windows)
     supportsSymlinks: true
     gameProjectFolder: Solarpunk
+    ignoreConflicts: [UE4SS-settings.ini, enabled.txt]
 
 stores:
   steam: "1805110"
@@ -28,24 +29,104 @@ stores:
   xbox: "rokapublish.Solarpunk"
 
 context:
-  # On Xbox/Game Pass the project files sit at the install root; on Steam/Epic they
-  # live under the Solarpunk/ project folder.
+  # On Xbox/Game Pass the project files sit at the install root and ship as WinGDK;
+  # on Steam/Epic they live under the Solarpunk/ project folder, arch Win64.
+  arch:
+    storeBranch:
+      xbox: WinGDK
+      default: Win64
   gamePath:
     storeBranch:
       xbox: ${installPath}
       default: ${installPath}/Solarpunk
 
-  pakModsPath: ${gamePath}/Content/Paks/~mods
-  paksPath:    ${gamePath}/Content/Paks
-  contentPath: ${gamePath}/Content
+  pakModsPath:   ${gamePath}/Content/Paks/~mods
+  logicModsPath: ${gamePath}/Content/Paks/LogicMods
+  paksPath:      ${gamePath}/Content/Paks
+  contentPath:   ${gamePath}/Content
+
+  # UE4SS / ReShade / loose DLL plugins all live next to the shipping exe.
+  binariesPath:  ${gamePath}/Binaries/${arch}
+  ue4ssRootPath: ${gamePath}/Binaries/${arch}/ue4ss
+  ue4ssModsPath: ${gamePath}/Binaries/${arch}/ue4ss/Mods
 
 modTypes:
-  - { id: solarpunk-pak,           name: "Paks (~mods)",       path: "${pakModsPath}" }
-  - { id: solarpunk-pakalt,        name: "Paks (no ~mods)",    path: "${paksPath}" }
-  - { id: solarpunk-contentfolder, name: "Content folder",     path: "${gamePath}" }
-  - { id: solarpunk-root,          name: "Root (game folder)", path: "${installPath}" }
+  - { id: solarpunk-pak,            name: "Paks (~mods)",               path: "${pakModsPath}" }
+  - { id: solarpunk-logicmods,      name: "LogicMods (Blueprint paks)", path: "${logicModsPath}" }
+  - { id: solarpunk-ue4ss,          name: "UE4SS (Lua mods)",           path: "${ue4ssModsPath}" }
+  - { id: solarpunk-ue4ss-injector, name: "UE4SS (loader)",             path: "${binariesPath}" }
+  - { id: solarpunk-binaries,       name: "Binaries (ReShade / DLL plugins)", path: "${binariesPath}" }
+  - { id: solarpunk-root,           name: "Root (game folder)",         path: "${installPath}" }
+  - { id: solarpunk-contentfolder,  name: "Content folder",             path: "${gamePath}" }
+  - { id: solarpunk-pakalt,         name: "Paks (no ~mods)",            path: "${paksPath}" }
 
 installers:
+  # --- Priority 15: UE4SS loader (dwmapi/xinput proxy or UE4SS-settings.ini) → Binaries ---
+  - id: ue4ss-injector
+    priority: 15
+    when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: solarpunk-ue4ss-injector
+
+  # --- Priority 18: ReShade preset (ReShade.ini, strip wrapper) → Binaries ---
+  - id: reshade
+    priority: 18
+    when: { hasFile: "**/ReShade.ini" }
+    unless: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/ReShade.ini"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: solarpunk-binaries
+
+  # --- Priority 20: LogicMods (Blueprint paks under LogicMods/) → Content/Paks ---
+  - id: logicmods
+    priority: 20
+    when: { hasFile: "**/LogicMods/**" }
+    anchor: "**/LogicMods/"
+    take: self
+    placeAt: "${paksPath}"
+    modType: solarpunk-logicmods
+
+  # --- Priority 22: UE4SS Lua (Scripts/*.lua present) → ue4ss/Mods ---
+  - id: ue4ss-lua
+    priority: 22
+    when: { hasFile: "**/Scripts/*.lua" }
+    unless: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/Scripts/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: solarpunk-ue4ss
+
+  # --- Priority 23: UE4SS Lua (enabled.txt only) → ue4ss/Mods ---
+  - id: ue4ss-lua-enabled
+    priority: 23
+    when: { hasFile: "**/enabled.txt" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/enabled.txt"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: solarpunk-ue4ss
+
+  # --- Priority 24: UE4SS Lua (bare .lua, no Scripts/ dir) → ue4ss/Mods ---
+  - id: ue4ss-lua-bare
+    priority: 24
+    when: { hasFile: "**/*.lua" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: solarpunk-ue4ss
+
   # --- Priority 25: Root — archive carries game-relative top-level dirs ---
   - id: root
     priority: 25
@@ -54,6 +135,12 @@ installers:
         - { hasFile: "**/Solarpunk/**" }
         - { hasFile: "**/Engine/**" }
         - { hasFile: "**/Binaries/**" }
+    unless:
+      any:
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
     anchor: "**/*"
     take: archive-root
     placeAt: "${installPath}"
@@ -71,10 +158,32 @@ installers:
         - { hasFile: "**/Solarpunk/**" }
         - { hasFile: "**/Engine/**" }
         - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
     anchor: "**/*"
     take: archive-root
     placeAt: "${gamePath}"
     modType: solarpunk-contentfolder
+
+  # --- Priority 27: Loose native DLL plugin (e.g. winmm/dll-injector mods) → Binaries ---
+  - id: native-dll
+    priority: 27
+    when: { hasFile: "**/*.dll" }
+    unless:
+      any:
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/ue4ss/**" }
+        - { hasFile: "**/ReShade.ini" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/Solarpunk/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/*.dll"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: solarpunk-binaries
 
   # --- Priority 28: A Paks/ folder bundled in the archive (not ~mods) → Content/Paks ---
   - id: pak-alt
@@ -86,6 +195,7 @@ installers:
     unless:
       any:
         - { hasFile: "**/~mods/**" }
+        - { hasFile: "**/LogicMods/**" }
         - { hasFile: "**/Solarpunk/**" }
         - { hasFile: "**/Engine/**" }
         - { hasFile: "**/Binaries/**" }
@@ -105,6 +215,7 @@ installers:
         - { hasFile: "**/Engine/**" }
         - { hasFile: "**/Binaries/**" }
         - { hasFile: "**/Paks/**" }
+        - { hasFile: "**/LogicMods/**" }
     anchor: "**/*.utoc"
     take: parent
     placeAt: "${pakModsPath}"
@@ -120,6 +231,7 @@ installers:
         - { hasFile: "**/Engine/**" }
         - { hasFile: "**/Binaries/**" }
         - { hasFile: "**/Paks/**" }
+        - { hasFile: "**/LogicMods/**" }
     anchor: "**/*.pak"
     take: parent
     placeAt: "${pakModsPath}"
@@ -130,9 +242,14 @@ setup:
     - ${pakModsPath}
 
 toolbarActions:
+  - id: open-ue4ss-settings
+    title: Open UE4SS Settings INI
+    priority: 200
+    target: { openFile: "${ue4ssRootPath}/UE4SS-settings.ini" }
+
   - id: open-nexus-page
     title: Open Nexus Page
-    priority: 200
+    priority: 201
     target: { openUrl: "https://www.nexusmods.com/solarpunk" }
 
 # Publishing to Nexus requires real positive ids; add this block once the Vortex
@@ -143,9 +260,102 @@ toolbarActions:
 #   fileGroupId: 0
 #   displayName: Solarpunk Support for Vortex
 
+# Corpus validators: assertions checked against real Nexus archives via
+# `gdl test:corpus --fetch` (needs NEXUS_API_KEY). They guard the routing of the
+# real day-one mod categories against rule regressions.
+validators:
+  - id: injector-validator
+    name: UE4SS loader archives (dwmapi/xinput/UE4SS-settings.ini) match ue4ss-injector
+    when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    assert: { matched: ue4ss-injector }
+
+  - id: reshade-validator
+    name: ReShade presets (ReShade.ini, no loader) match reshade
+    when:
+      all:
+        - { hasFile: "**/ReShade.ini" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    assert: { matched: reshade }
+
+  - id: logicmods-validator
+    name: Archives with LogicMods paks match logicmods
+    when: { hasFile: "**/LogicMods/**/*.pak" }
+    assert: { matched: logicmods }
+
+  - id: ue4ss-lua-validator
+    name: Lua mods (Scripts/*.lua, no loader) match ue4ss-lua
+    when:
+      all:
+        - { hasFile: "**/Scripts/*.lua" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    assert: { matched: ue4ss-lua }
+
 tests:
-  corpus: off
+  corpus: nexus
   cases:
+    # --- UE4SS loader (real shape: UE4SS Solarpunk, mod 4) ---
+    - name: "ue4ss-injector: dwmapi.dll + ue4ss tree dropped into Binaries"
+      archive:
+        - dwmapi.dll
+        - tbb12.dll
+        - ue4ss/UE4SS-settings.ini
+        - ue4ss/Mods/keep_me.txt
+      expect:
+        matched: ue4ss-injector
+        modType: solarpunk-ue4ss-injector
+        plan:
+          - ${binariesPath}/dwmapi.dll
+          - ${binariesPath}/tbb12.dll
+          - ${binariesPath}/ue4ss/UE4SS-settings.ini
+          - ${binariesPath}/ue4ss/Mods/keep_me.txt
+
+    # --- ReShade preset (real shape: WarmSun, mod 1) ---
+    - name: "reshade: preset folder stripped into Binaries"
+      archive:
+        - WarmSun/ReShade.ini
+        - WarmSun/WarmSun.ini
+        - WarmSun/reshade-shaders/Shaders/Clarity.fx
+      expect:
+        matched: reshade
+        modType: solarpunk-binaries
+        plan:
+          - ${binariesPath}/ReShade.ini
+          - ${binariesPath}/WarmSun.ini
+          - ${binariesPath}/reshade-shaders/Shaders/Clarity.fx
+
+    # --- Loose native DLL plugin (real shape: AirshipShare, mod 5) ---
+    - name: "native-dll: bare dll placed in Binaries"
+      archive:
+        - AirshipShare.dll
+      expect:
+        matched: native-dll
+        modType: solarpunk-binaries
+        plan:
+          - ${binariesPath}/AirshipShare.dll
+
+    # --- UE4SS Lua ---
+    - name: "ue4ss: lua mod with Scripts folder"
+      archive:
+        - MyMod/Scripts/main.lua
+        - MyMod/enabled.txt
+      expect:
+        matched: ue4ss-lua
+        modType: solarpunk-ue4ss
+        plan:
+          - ${ue4ssModsPath}/MyMod/Scripts/main.lua
+          - ${ue4ssModsPath}/MyMod/enabled.txt
+
+    # --- LogicMods ---
+    - name: "logicmods: paks under LogicMods/ folder"
+      archive:
+        - Pack/LogicMods/BPFolder/X.pak
+      expect:
+        matched: logicmods
+        modType: solarpunk-logicmods
+        plan:
+          - ${paksPath}/LogicMods/BPFolder/X.pak
+
+    # --- Pak mods (real shape: No Intro / Better Stacks, mods 2 & 3) ---
     - name: "pak: single pak file flattened to ~mods"
       archive:
         - SomeMod/Cool.pak
