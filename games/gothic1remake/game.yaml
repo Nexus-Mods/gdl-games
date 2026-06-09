@@ -1,0 +1,377 @@
+gdl: 1
+version: 2.0.0
+
+game:
+  id: gothic1remake
+  name: Gothic 1 Remake
+  executable: G1R-Win64-Shipping.exe
+  requiredFiles: [G1R-Win64-Shipping.exe]
+  logo: gameart.webp
+  nexusDomain: gothic1remake
+  details:
+    steamAppId: 1297900
+    supportsSymlinks: true
+    gameProjectFolder: G1R
+    ignoreConflicts: [enabled.txt, mods.txt, UE4SS-settings.ini]
+    ignoreDeploy: [mods.txt]
+
+stores:
+  steam: "1297900"
+
+context:
+  gamePath: ${installPath}/G1R
+  pakModsPath: ${gamePath}/Content/Paks/~mods
+  nativeModsPath: ${gamePath}/Mods
+  ue4ssInjectorPath: ${gamePath}/Binaries/Win64
+  ue4ssRootPath: ${gamePath}/Binaries/Win64/ue4ss
+  ue4ssModsPath: ${gamePath}/Binaries/Win64/ue4ss/Mods
+
+modTypes:
+  - id: gothic1remake-pak
+    name: "Paks (~mods)"
+    path: "${pakModsPath}"
+
+  - id: gothic1remake-nativemod
+    name: "Native Gothic Mod"
+    path: "${nativeModsPath}"
+
+  - id: gothic1remake-ue4ss
+    name: "UE4SS Lua script"
+    path: "${ue4ssModsPath}"
+
+  - id: gothic1remake-ue4ss-injector
+    name: "UE4SS Injector"
+    path: "${ue4ssInjectorPath}"
+
+  - id: gothic1remake-root
+    name: "Root (game folder)"
+    path: "${installPath}"
+
+  - id: gothic1remake-contentfolder
+    name: "Content folder"
+    path: "${gamePath}"
+
+installers:
+  # --- Native Gothic Mods (GothicMod.json manifest) ---
+  - id: native-gothic-mod
+    priority: 10
+    when: { hasFile: "**/GothicMod.json" }
+    anchor: "**/GothicMod.json"
+    take: parent.parent
+    placeAt: "${nativeModsPath}"
+    modType: gothic1remake-nativemod
+
+  # --- UE4SS Injector (dwmapi.dll, xinput1_4.dll, UE4SS-settings.ini) ---
+  # Support both layouts users can install:
+  # - upstream UE4SS release: https://github.com/UE4SS-RE/RE-UE4SS/releases/tag/v3.0.1
+  #   UE4SS_v3.0.1/
+  #   ├── dwmapi.dll
+  #   ├── UE4SS.dll
+  #   └── UE4SS-settings.ini
+  # - Nexus repack: https://www.nexusmods.com/gothic1remake/mods/3
+  #   UE4SS-3-v3-0-1-326-g940af53-1740576953/
+  #   └── G1R/
+  #       └── Binaries/Win64/
+  #           ├── dwmapi.dll
+  #           ├── UE4SS.dll
+  #           └── UE4SS-settings.ini
+  # The repack rule anchors at Win64 and uses `take: self` so the copy destinations
+  # are just the files below Win64 while keeping the same UE4SS Injector mod type.
+  - id: ue4ss-injector-repack
+    priority: 14
+    when: { hasFile: "**/Win64/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/Win64/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}"
+    take: self
+    placeAt: "${ue4ssInjectorPath}"
+    modType: gothic1remake-ue4ss-injector
+
+  # Generic upstream UE4SS release: marker file parent is the install root.
+  - id: ue4ss-injector
+    priority: 15
+    when: { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}"
+    take: parent
+    placeAt: "${ue4ssInjectorPath}"
+    modType: gothic1remake-ue4ss-injector
+
+  # --- UE4SS Lua (Scripts/*.lua present) ---
+  - id: ue4ss-lua
+    priority: 22
+    when: { hasFile: "**/Scripts/*.lua" }
+    unless: { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/Scripts/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: gothic1remake-ue4ss
+
+  # --- Root (G1R/, Engine/, or Binaries/ segments) ---
+  - id: root
+    priority: 25
+    when:
+      any:
+        - { hasFile: "**/G1R/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/GothicMod.json" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}"
+    modType: gothic1remake-root
+
+  # --- Content folder (Content/ or Config/ at archive root) ---
+  - id: content-folder
+    priority: 26
+    when:
+      any:
+        - { hasFile: "Content/**" }
+        - { hasFile: "Config/**" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/GothicMod.json" }
+        - { hasFile: "**/G1R/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${gamePath}"
+    modType: gothic1remake-contentfolder
+
+  # --- Pak (default, flatten into ~mods) ---
+  - id: pak
+    priority: 30
+    when: { hasFile: "**/*.pak" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/G1R/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/GothicMod.json" }
+    anchor: "**/*.pak"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: gothic1remake-pak
+
+discovery:
+  version:
+    file: "${installPath}/G1R/Version/version.txt"
+    regex: "Build(\\d+_CL\\d+)"
+
+setup:
+  ensureDirs:
+    - ${pakModsPath}
+    - ${ue4ssModsPath}
+
+events:
+  did-deploy: { hook: regenerateModsTxt }
+
+toolbarActions:
+  - id: open-ue4ss-settings
+    title: Open UE4SS Settings INI
+    priority: 200
+    target: { openFile: "${ue4ssRootPath}/UE4SS-settings.ini" }
+
+  - id: open-mods-txt
+    title: Open UE4SS mods.txt
+    priority: 201
+    target: { openFile: "${ue4ssModsPath}/mods.txt" }
+
+  - id: open-nexus-page
+    title: Open Nexus Page
+    priority: 202
+    target: { openUrl: "https://www.nexusmods.com/gothic1remake" }
+
+nexus:
+  modId: 1943
+  fileGroupId: 7473926
+  displayName: Gothic 1 Remake Support for Vortex
+
+tests:
+  corpus: nexus
+  cases:
+    # --- Native Gothic Mods ---
+    - name: "native: mod with GothicMod.json"
+      archive:
+        - MyGothicMod/GothicMod.json
+        - MyGothicMod/Data/meshes.pak
+      expect:
+        matched: native-gothic-mod
+        modType: gothic1remake-nativemod
+        plan:
+          - ${nativeModsPath}/MyGothicMod/GothicMod.json
+          - ${nativeModsPath}/MyGothicMod/Data/meshes.pak
+
+    - name: "native: wrapped mod strips outer directory"
+      archive:
+        - wrapper/CoolMod/GothicMod.json
+        - wrapper/CoolMod/Config/Engine.ini
+      expect:
+        matched: native-gothic-mod
+        modType: gothic1remake-nativemod
+        plan:
+          - ${nativeModsPath}/CoolMod/GothicMod.json
+          - ${nativeModsPath}/CoolMod/Config/Engine.ini
+
+    # --- UE4SS Injector ---
+    - name: "injector: dwmapi.dll at archive root"
+      archive:
+        - dwmapi.dll
+        - UE4SS.dll
+      expect:
+        matched: ue4ss-injector
+        modType: gothic1remake-ue4ss-injector
+        plan:
+          - ${ue4ssInjectorPath}/dwmapi.dll
+          - ${ue4ssInjectorPath}/UE4SS.dll
+
+    - name: "injector: marker in subfolder strips wrapper"
+      archive:
+        - ue4ss/dwmapi.dll
+        - ue4ss/UE4SS.dll
+        - ue4ss/UE4SS-settings.ini
+      expect:
+        matched: ue4ss-injector
+        modType: gothic1remake-ue4ss-injector
+        plan:
+          - ${ue4ssInjectorPath}/dwmapi.dll
+          - ${ue4ssInjectorPath}/UE4SS.dll
+          - ${ue4ssInjectorPath}/UE4SS-settings.ini
+
+    # Nexus repack already contains `G1R/Binaries/Win64/`, so it must not
+    # get that path duplicated again during install.
+    - name: "injector: game-relative Win64 folder strips game path"
+      archive:
+        - G1R/Binaries/Win64/dwmapi.dll
+        - G1R/Binaries/Win64/UE4SS.dll
+        - G1R/Binaries/Win64/UE4SS-settings.ini
+      expect:
+        matched: ue4ss-injector-repack
+        modType: gothic1remake-ue4ss-injector
+        plan:
+          - ${ue4ssInjectorPath}/dwmapi.dll
+          - ${ue4ssInjectorPath}/UE4SS.dll
+          - ${ue4ssInjectorPath}/UE4SS-settings.ini
+
+    # --- UE4SS Lua ---
+    - name: "ue4ss: lua mod with Scripts folder"
+      archive:
+        - MyMod/Scripts/main.lua
+        - MyMod/Scripts/util.lua
+      expect:
+        matched: ue4ss-lua
+        modType: gothic1remake-ue4ss
+        plan:
+          - ${ue4ssModsPath}/MyMod/Scripts/main.lua
+          - ${ue4ssModsPath}/MyMod/Scripts/util.lua
+
+    - name: "ue4ss: wrapped mod strips outer directory"
+      archive:
+        - wrapper/MyMod/Scripts/main.lua
+        - wrapper/MyMod/enabled.txt
+      expect:
+        matched: ue4ss-lua
+        modType: gothic1remake-ue4ss
+        plan:
+          - ${ue4ssModsPath}/MyMod/Scripts/main.lua
+          - ${ue4ssModsPath}/MyMod/enabled.txt
+
+    # --- Root ---
+    - name: "root: G1R + Engine segments"
+      archive:
+        - G1R/Content/Paks/foo.pak
+        - Engine/Content/bar.uasset
+      expect:
+        matched: root
+        modType: gothic1remake-root
+        plan:
+          - ${installPath}/G1R/Content/Paks/foo.pak
+          - ${installPath}/Engine/Content/bar.uasset
+
+    - name: "root: Binaries segment"
+      archive:
+        - Binaries/Win64/mod.dll
+      expect:
+        matched: root
+        modType: gothic1remake-root
+        plan:
+          - ${installPath}/Binaries/Win64/mod.dll
+
+    # --- Content Folder ---
+    - name: "content-folder: Content/ at archive root"
+      archive:
+        - Content/Foo.uasset
+        - Content/Bar.uexp
+      expect:
+        matched: content-folder
+        modType: gothic1remake-contentfolder
+        plan:
+          - ${gamePath}/Content/Foo.uasset
+          - ${gamePath}/Content/Bar.uexp
+
+    - name: "content-folder: Config/ at archive root"
+      archive:
+        - Config/settings.ini
+      expect:
+        matched: content-folder
+        modType: gothic1remake-contentfolder
+        plan:
+          - ${gamePath}/Config/settings.ini
+
+    # --- Pak (default) ---
+    - name: "pak: single pak file"
+      archive:
+        - SomeMod/Cool.pak
+      expect:
+        matched: pak
+        modType: gothic1remake-pak
+        plan:
+          - ${pakModsPath}/Cool.pak
+
+    - name: "pak: pak+ucas+utoc triplet flattened"
+      archive:
+        - SomeMod/files/x_P.pak
+        - SomeMod/files/x_P.ucas
+        - SomeMod/files/x_P.utoc
+      expect:
+        matched: pak
+        modType: gothic1remake-pak
+        plan:
+          - ${pakModsPath}/x_P.pak
+          - ${pakModsPath}/x_P.ucas
+          - ${pakModsPath}/x_P.utoc
+
+    # --- Priority scenarios ---
+    - name: "native-gothic-mod wins over pak"
+      archive:
+        - MyMod/GothicMod.json
+        - MyMod/Data/content.pak
+      expect:
+        matched: native-gothic-mod
+        modType: gothic1remake-nativemod
+
+validators:
+  - id: native-mod-validator
+    name: Archives with GothicMod.json should match native-gothic-mod installer
+    when: { hasFile: "**/GothicMod.json" }
+    assert:
+      matched: native-gothic-mod
+
+  - id: injector-validator
+    name: Archives with injector markers should match ue4ss-injector
+    when:
+      all:
+        - { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { not: { hasFile: "**/Win64/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" } }
+    assert:
+      matched: ue4ss-injector
+
+  - id: injector-repack-validator
+    name: Archives with game-relative injector markers should match ue4ss-injector-repack
+    when: { hasFile: "**/Win64/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    assert:
+      matched: ue4ss-injector-repack
