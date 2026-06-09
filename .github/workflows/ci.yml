@@ -86,9 +86,10 @@ jobs:
           cli="$root/gdl/dist/cli.js"
           items=()
           for dir in games/*/; do
-            [ -f "${dir}package.json" ] || continue
+            [ -f "${dir}game.yaml" ] || continue
             id="$(basename "$dir")"
-            version="$(node -p "require('./${dir}package.json').version")"
+            version="$( (cd "$dir" && node "$cli" publish-info version) 2>/dev/null || echo '')"
+            [ -n "$version" ] || { echo "skip  ${id} (could not resolve version)"; continue; }
             tag="${id}-v${version}"
             if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
               echo "skip  ${tag} (already released)"; continue
