@@ -1,0 +1,9 @@
+packages:
+  - 'games/*'
+
+# Permit postinstall build scripts for these transitive deps:
+#   esbuild  → pulled in by vitest
+#   core-js  → pulled in by vortex-api (used by games that add src/hooks.ts)
+allowBuilds:
+  core-js: true
+  esbuild: true

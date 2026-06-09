@@ -1,0 +1,16 @@
+{
+  "name": "game-solarpunk",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@11.0.9",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build":       "node ../../gdl/dist/cli.js build",
+    "test":        "node ../../gdl/dist/cli.js build && vitest run .gdl-out/tests.gen.ts",
+    "test:corpus": "node ../../gdl/dist/cli.js test:corpus",
+    "package":     "node ../../gdl/dist/cli.js package"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
+}

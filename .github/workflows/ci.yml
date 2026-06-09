@@ -1,0 +1,196 @@
+name: CI
+
+# One workflow for the whole monorepo.
+#
+# build-test: runs on every push/PR — builds and tests ALL games in bulk.
+# release:    runs only on push to main — ships every game whose version was bumped.
+#
+# Releases are gated on a VERSION BUMP, not on hand-typed tags. To ship a game,
+# bump `version` in games/<id>/package.json and merge to main. CI then releases
+# any game that has no matching `<id>-v<version>` git tag yet; that tag is created
+# as part of the release and acts as the "already-published" ledger so the game is
+# not released again on the next push. Games with an unchanged version are skipped.
+#
+# Convention: the folder name under games/ must equal the game id in its game.yaml.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build + test every game (the PR gate).
+  # ---------------------------------------------------------------------------
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build GDL toolchain
+        run: cd gdl && pnpm install --frozen-lockfile && pnpm run build
+
+      - name: Build all games
+        run: pnpm build
+
+      - name: Test all games
+        run: pnpm test
+
+  # ---------------------------------------------------------------------------
+  # Decide which games need releasing. A game is queued only when ALL hold:
+  #   * its version has no matching `<id>-v<version>` ledger tag yet (it was bumped), and
+  #   * it is release-ready: game.yaml has no PLACEHOLDER tokens and resolves positive
+  #     nexus mod-id / file-group-id.
+  # Skeleton / not-yet-ready games are skipped quietly (logged, not failed) so main stays
+  # green. Emits a matrix consumed by the release job below.
+  # ---------------------------------------------------------------------------
+  detect-releases:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-test
+    runs-on: ubuntu-latest
+    outputs:
+      any: ${{ steps.scan.outputs.any }}
+      matrix: ${{ steps.scan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0   # need full tag history for the ledger check
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Build GDL toolchain
+        run: cd gdl && pnpm install --frozen-lockfile && pnpm run build
+
+      - id: scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$PWD"
+          cli="$root/gdl/dist/cli.js"
+          items=()
+          for dir in games/*/; do
+            [ -f "${dir}package.json" ] || continue
+            id="$(basename "$dir")"
+            version="$(node -p "require('./${dir}package.json').version")"
+            tag="${id}-v${version}"
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+              echo "skip  ${tag} (already released)"; continue
+            fi
+            if grep -qF PLACEHOLDER "${dir}game.yaml"; then
+              echo "skip  ${tag} (game.yaml still has PLACEHOLDER tokens)"; continue
+            fi
+            modId="$( (cd "$dir" && node "$cli" publish-info mod-id) 2>/dev/null || echo '')"
+            fgId="$( (cd "$dir" && node "$cli" publish-info file-group-id) 2>/dev/null || echo '')"
+            if [ -z "$modId" ] || [ "$modId" = "0" ] || [ -z "$fgId" ] || [ "$fgId" = "0" ]; then
+              echo "skip  ${tag} (no valid nexus ids yet — not release-ready)"; continue
+            fi
+            echo "queue ${tag}"
+            items+=("{\"id\":\"${id}\",\"version\":\"${version}\",\"tag\":\"${tag}\"}")
+          done
+          if [ ${#items[@]} -eq 0 ]; then
+            echo "Nothing to release."
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+          else
+            joined=$(IFS=,; echo "${items[*]}")
+            echo "any=true" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"include\":[${joined}]}" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Release each bumped game: guard → package → GitHub release (ledger tag) → Nexus.
+  # ---------------------------------------------------------------------------
+  release:
+    needs: detect-releases
+    if: needs.detect-releases.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect-releases.outputs.matrix) }}
+    concurrency:
+      group: release-${{ matrix.tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build GDL toolchain
+        run: cd gdl && pnpm install --frozen-lockfile && pnpm run build
+
+      - name: Guard against placeholder ids
+        working-directory: games/${{ matrix.id }}
+        run: |
+          set -euo pipefail
+          if grep -nF PLACEHOLDER game.yaml; then
+            echo "::error file=games/${{ matrix.id }}/game.yaml::game.yaml still contains PLACEHOLDER tokens"
+            exit 1
+          fi
+          modId="$(node ../../gdl/dist/cli.js publish-info mod-id)"
+          fgId="$(node ../../gdl/dist/cli.js publish-info file-group-id)"
+          if [ "$modId" = "0" ] || [ "$fgId" = "0" ]; then
+            echo "::error file=games/${{ matrix.id }}/game.yaml::nexus modId/fileGroupId is still 0 — refusing to publish a stub"
+            exit 1
+          fi
+
+      - name: Package extension
+        working-directory: games/${{ matrix.id }}
+        run: node ../../gdl/dist/cli.js package
+
+      - name: Resolve publish metadata
+        id: meta
+        working-directory: games/${{ matrix.id }}
+        run: |
+          set -euo pipefail
+          {
+            echo "file_group_id=$(node ../../gdl/dist/cli.js publish-info file-group-id)"
+            echo "display_name=$(node ../../gdl/dist/cli.js publish-info display-name)"
+            echo "version=$(node ../../gdl/dist/cli.js publish-info version)"
+            echo "zip_name=$(node ../../gdl/dist/cli.js publish-info zip-name)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release (creates the ledger tag)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ matrix.tag }}
+          name: ${{ matrix.id }} v${{ matrix.version }}
+          files: games/${{ matrix.id }}/out/*.zip
+          generate_release_notes: true
+
+      - name: Publish to Nexus Mods
+        uses: Nexus-Mods/upload-action@main
+        with:
+          api_key: ${{ secrets.NEXUS_API_KEY }}
+          file_group_id: ${{ steps.meta.outputs.file_group_id }}
+          display_name: ${{ steps.meta.outputs.display_name }}
+          filename: games/${{ matrix.id }}/out/${{ steps.meta.outputs.zip_name }}
+          version: ${{ steps.meta.outputs.version }}
+          archive_existing_file: true

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.gdl-out/
+out/
+tests/cache/
+*.log
+.DS_Store

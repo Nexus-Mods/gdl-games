@@ -1,0 +1,28 @@
+gdl: 1
+
+game:
+  id: solarpunk
+  name: Solarpunk
+  executable: solarpunk.exe
+  requiredFiles:
+    - solarpunk.exe
+
+stores:
+  steam: 0    # replace with the game's Steam app id
+
+modTypes: []     # add one entry per mod type the game supports
+
+installers: []   # add installer rules
+
+# Releasing requires a `nexus` block with real positive ids; GDL rejects 0/placeholder
+# values at build time, so it is intentionally omitted from this skeleton. Add it when
+# the game's Nexus mod page exists, e.g.:
+#
+# nexus:
+#   modId: 1234           # the mod-page id from your nexusmods.com URL (/mods/1234 → 1234)
+#   fileGroupId: 5678     # the file-group id Nexus shows on the upload page
+#   displayName: Solarpunk Support for Vortex
+
+tests:
+  corpus: off
+  cases: []
