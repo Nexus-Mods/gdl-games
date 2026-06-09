@@ -1,0 +1,5 @@
+# Not a package workspace — this file only carries pnpm settings. pnpm 10+ reads
+# the build-script allowlist from here. esbuild ships a native binary via a
+# postinstall script and is pulled in by vitest.
+allowBuilds:
+  esbuild: true
