@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "namedInputs": {
+    "gameSource": [
+      "{projectRoot}/game.yaml",
+      "{projectRoot}/src/**/*",
+      "{projectRoot}/gameart.webp"
+    ],
+    "gdlToolchain": [
+      { "runtime": "git -C gdl rev-parse HEAD" }
+    ]
+  },
+  "targetDefaults": {
+    "build": {
+      "cache": true,
+      "inputs": ["gameSource", "gdlToolchain"],
+      "outputs": ["{projectRoot}/dist", "{projectRoot}/.gdl-out"]
+    },
+    "package": {
+      "cache": true,
+      "inputs": ["gameSource", "gdlToolchain"],
+      "outputs": ["{projectRoot}/dist", "{projectRoot}/.gdl-out", "{projectRoot}/out"]
+    },
+    "test": {
+      "cache": true,
+      "dependsOn": ["build"],
+      "inputs": ["gameSource", "gdlToolchain", "{workspaceRoot}/vitest.config.ts"]
+    },
+    "test-corpus": {
+      "cache": false
+    }
+  },
+  "plugins": ["./tools/nx/gdl-plugin.js"]
+}

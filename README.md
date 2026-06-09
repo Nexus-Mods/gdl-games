@@ -9,17 +9,22 @@ GDL compiles that into a bundled Vortex extension. There is **one** copy of the 
 for the whole repo (the `gdl/` submodule), and **one** set of orchestration / CI / packaging
 config at the root — no per-game `package.json`, `vitest.config`, or workflow files.
 
+Task running is handled by [Nx](https://nx.dev): each `games/*/game.yaml` is detected as an Nx
+project (via an inference plugin — no per-game config), giving cached, parallel `build`/`test`/
+`package` targets and `nx affected`.
+
 ```
 gdl-games/
-├── gdl/                      # shared GDL toolchain (git submodule, built once)
+├── gdl/                       # shared GDL toolchain (git submodule, built once)
 ├── games/
-│   └── solarpunk/            # one folder per game — just two files:
-│       ├── game.yaml         #   the game definition (incl. top-level `version:`)
-│       └── gameart.webp      #   the logo
-├── scripts/run-gdl.mjs       # runs a gdl command against every games/*/game.yaml
-├── vitest.config.ts          # one config that tests every game
-├── .github/workflows/ci.yml  # build/test all games; release on version bump
-└── package.json              # root scripts: build / test / package ALL games
+│   └── solarpunk/             # one folder per game — just two files:
+│       ├── game.yaml          #   the game definition (incl. top-level `version:`)
+│       └── gameart.webp       #   the logo
+├── tools/nx/gdl-plugin.js     # Nx inference plugin: game.yaml → project + targets
+├── nx.json                    # Nx caching inputs/outputs + targetDefaults
+├── vitest.config.ts           # one config that tests every game
+├── .github/workflows/ci.yml   # build/test (Nx affected) + release on version bump
+└── package.json               # root scripts (wrap nx)
 ```
 
 ## Setup
@@ -28,7 +33,7 @@ gdl-games/
 git clone --recurse-submodules <repo-url>
 cd gdl-games
 pnpm init-gdl     # install + build the shared GDL toolchain (run once, or after a gdl bump)
-pnpm install      # install root dev deps (vitest)
+pnpm install      # install root dev deps (nx, vitest)
 ```
 
 If you already cloned without submodules: `git submodule update --init --recursive`.
@@ -36,18 +41,25 @@ If you already cloned without submodules: `git submodule update --init --recursi
 ## Working with all games at once
 
 ```sh
-pnpm build        # build every game
-pnpm test         # build, then run every game's generated tests (root vitest config)
-pnpm package      # package every game into games/<id>/out/<id>-vortex-v<version>.zip
-pnpm test:corpus  # run installer rules against cached Nexus manifests (see below)
+pnpm build        # nx run-many -t build    — build every game (cached)
+pnpm test         # nx run-many -t test     — build + run every game's generated tests
+pnpm package      # nx run-many -t package  — zip games/<id>/out/<id>-vortex-v<version>.zip
+pnpm test:corpus  # nx run-many -t test-corpus — installer rules vs cached Nexus manifests
 ```
 
-Each of these calls `scripts/run-gdl.mjs`, which discovers every `games/*/game.yaml` and invokes
-the shared `gdl` CLI once per game.
+Nx caches each target by `game.yaml` + `src/**` + `gameart.webp` + the gdl toolchain commit, so
+unchanged games are restored from cache. Use `pnpm affected` (`nx affected`) to act only on games
+touched by your changes, e.g. `nx affected -t build test`.
 
 ## Working with a single game
 
-From inside the game folder, call the shared toolchain directly:
+```sh
+nx run solarpunk:build
+nx run solarpunk:test
+nx run solarpunk:package
+```
+
+Or from inside the game folder, call the shared toolchain directly (bypassing Nx):
 
 ```sh
 cd games/solarpunk

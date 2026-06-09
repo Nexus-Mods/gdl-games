@@ -10,12 +10,14 @@
   },
   "scripts": {
     "init-gdl": "cd gdl && pnpm install && pnpm build",
-    "build": "node scripts/run-gdl.mjs build",
-    "test": "node scripts/run-gdl.mjs build && vitest run",
-    "test:corpus": "node scripts/run-gdl.mjs test:corpus",
-    "package": "node scripts/run-gdl.mjs package"
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "test:corpus": "nx run-many -t test-corpus",
+    "package": "nx run-many -t package",
+    "affected": "nx affected"
   },
   "devDependencies": {
+    "nx": "^22.7.5",
     "vitest": "^3.0.0"
   }
 }

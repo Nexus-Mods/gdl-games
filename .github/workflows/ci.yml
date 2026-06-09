@@ -21,7 +21,8 @@ on:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Build + test every game (the PR gate).
+  # Build + test games via Nx. PRs only build/test the games affected by the
+  # change; pushes to main build/test everything (the pre-release gate).
   # ---------------------------------------------------------------------------
   build-test:
     runs-on: ubuntu-latest
@@ -29,6 +30,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+          fetch-depth: 0   # Nx affected needs git history
 
       - uses: pnpm/action-setup@v4
 
@@ -42,11 +44,15 @@ jobs:
       - name: Build GDL toolchain
         run: cd gdl && pnpm install --frozen-lockfile && pnpm run build
 
-      - name: Build all games
-        run: pnpm build
-
-      - name: Test all games
-        run: pnpm test
+      - name: Build & test games (Nx)
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+            npx nx affected -t build test --base="origin/${{ github.base_ref }}" --head=HEAD
+          else
+            npx nx run-many -t build test
+          fi
 
   # ---------------------------------------------------------------------------
   # Decide which games need releasing. A game is queued only when ALL hold:
