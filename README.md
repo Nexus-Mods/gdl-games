@@ -130,7 +130,7 @@ tests:
   cases: []
 ```
 
-`node ../../gdl/dist/cli.js init <id>` can scaffold a starting `game.yaml`, but delete the other
-files it emits (`package.json`, `vitest.config`, `.github/`, `.gitignore`) — the root provides
-those. Add a `nexus:` block only once the extension's Nexus page exists (GDL rejects `0`/
+From inside `games/<id>/`, `node ../../gdl/dist/cli.js init <id> -n "Human Friendly Name"`
+scaffolds the starting `game.yaml` (root-driven — it emits only `game.yaml`, with a top-level
+`version:`). Add a `nexus:` block only once the extension's Nexus page exists (GDL rejects `0`/
 placeholder nexus ids at build time).
