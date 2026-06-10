@@ -34,7 +34,6 @@ context:
   pakModsPath: ${gamePath}/Content/Paks/~mods
   logicModsPath: ${gamePath}/Content/Paks/LogicMods
   paksPath: ${gamePath}/Content/Paks
-  contentPath: ${gamePath}/Content
 
   ue4ssInjectorPath: ${gamePath}/Binaries/${arch}
   ue4ssRootPath: ${gamePath}/Binaries/${arch}/ue4ss
