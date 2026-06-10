@@ -1,5 +1,5 @@
 gdl: 1
-version: 1.2.0
+version: 1.3.0
 
 game:
   id: paralives
@@ -8,6 +8,7 @@ game:
   requiredFiles:
     - Paralives.exe
   logo: gameart.webp
+  author: Nexus Mods
   nexusDomain: paralives
 
 discovery:
