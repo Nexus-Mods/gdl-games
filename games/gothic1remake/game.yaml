@@ -105,38 +105,34 @@ installers:
     placeAt: "${ue4ssModsPath}"
     modType: gothic1remake-ue4ss
 
-  # --- Root (G1R/, Engine/, or Binaries/ segments) ---
+  # --- Priority 16: Root (game-relative archives laid out from the install root) ---
+  # Positioned AFTER the injector installers (so the Nexus UE4SS repack keeps its
+  # dedicated handling) but BEFORE ue4ss-lua/pak. When an archive is arranged from
+  # the install root (top-level G1R/ or Engine/), the whole tree deploys as-is, so
+  # a MIXED mod (lua under Binaries/ + a pak under Content/Paks/) lands every file
+  # in place instead of ue4ss-lua claiming it and dropping the pak.
   - id: root
-    priority: 25
+    priority: 16
     when:
       any:
-        - { hasFile: "**/G1R/**" }
-        - { hasFile: "**/Engine/**" }
-        - { hasFile: "**/Binaries/**" }
-    unless:
-      any:
-        - { hasFile: "**/Scripts/*.lua" }
-        - { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
-        - { hasFile: "**/GothicMod.json" }
+        - { hasFile: "G1R/**" }
+        - { hasFile: "Engine/**" }
     anchor: "**/*"
     take: archive-root
     placeAt: "${installPath}"
     modType: gothic1remake-root
 
-  # --- Content folder (Content/ or Config/ at archive root) ---
+  # --- Priority 17: Content folder (project-relative trees: Content/, Config/, Binaries/) ---
+  # Sibling of `root` for archives laid out from the project folder rather than the
+  # install root. Whole tree deploys to ${gamePath} (= installPath/G1R), so a bare
+  # Binaries/ tree correctly lands under the project folder.
   - id: content-folder
-    priority: 26
+    priority: 17
     when:
       any:
         - { hasFile: "Content/**" }
         - { hasFile: "Config/**" }
-    unless:
-      any:
-        - { hasFile: "**/Scripts/*.lua" }
-        - { hasFile: "**/GothicMod.json" }
-        - { hasFile: "**/G1R/**" }
-        - { hasFile: "**/Engine/**" }
-        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "Binaries/**" }
     anchor: "**/*"
     take: archive-root
     placeAt: "${gamePath}"
@@ -293,14 +289,14 @@ tests:
           - ${installPath}/G1R/Content/Paks/foo.pak
           - ${installPath}/Engine/Content/bar.uasset
 
-    - name: "root: Binaries segment"
+    - name: "content-folder: bare Binaries/ tree lands under the project folder"
       archive:
         - Binaries/Win64/mod.dll
       expect:
-        matched: root
-        modType: gothic1remake-root
+        matched: content-folder
+        modType: gothic1remake-contentfolder
         plan:
-          - ${installPath}/Binaries/Win64/mod.dll
+          - ${gamePath}/Binaries/Win64/mod.dll
 
     # --- Content Folder ---
     - name: "content-folder: Content/ at archive root"
@@ -354,6 +350,23 @@ tests:
       expect:
         matched: native-gothic-mod
         modType: gothic1remake-nativemod
+
+    # --- Mixed game-relative mod (UE4SS lua + asset-replacement pak) ---
+    # A single archive laid out from the install root carrying BOTH a UE4SS Lua
+    # payload and a pak must deploy as one intact tree — the pak must NOT be
+    # dropped by the narrower ue4ss-lua installer claiming the archive.
+    - name: "root: mixed lua+pak game-relative archive keeps paks"
+      archive:
+        - G1R/Binaries/Win64/ue4ss/Mods/Foo/Scripts/main.lua
+        - G1R/Binaries/Win64/ue4ss/Mods/Foo/enabled.txt
+        - G1R/Content/Paks/~mods/Foo_P.pak
+      expect:
+        matched: root
+        modType: gothic1remake-root
+        plan:
+          - ${installPath}/G1R/Binaries/Win64/ue4ss/Mods/Foo/Scripts/main.lua
+          - ${installPath}/G1R/Binaries/Win64/ue4ss/Mods/Foo/enabled.txt
+          - ${installPath}/G1R/Content/Paks/~mods/Foo_P.pak
 
 validators:
   - id: native-mod-validator

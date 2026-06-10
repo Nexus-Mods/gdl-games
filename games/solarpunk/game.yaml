@@ -133,40 +133,34 @@ installers:
     placeAt: "${ue4ssModsPath}"
     modType: solarpunk-ue4ss
 
-  # --- Priority 25: Root — archive carries game-relative top-level dirs ---
+  # --- Priority 16: Root (game-relative archives laid out from the install root) ---
+  # Positioned AFTER the UE4SS loader (so injector packages keep their handling)
+  # but BEFORE logicmods/ue4ss-lua/pak. When an archive is arranged from the
+  # install root (top-level Solarpunk/ or Engine/), the whole tree deploys as-is,
+  # so a MIXED mod (lua under Binaries/ + a pak under Content/Paks/) lands every
+  # file in place instead of ue4ss-lua claiming it and dropping the pak.
   - id: root
-    priority: 25
+    priority: 16
     when:
       any:
-        - { hasFile: "**/Solarpunk/**" }
-        - { hasFile: "**/Engine/**" }
-        - { hasFile: "**/Binaries/**" }
-    unless:
-      any:
-        - { hasFile: "**/LogicMods/**" }
-        - { hasFile: "**/Scripts/*.lua" }
-        - { hasFile: "**/enabled.txt" }
-        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "Solarpunk/**" }
+        - { hasFile: "Engine/**" }
     anchor: "**/*"
     take: archive-root
     placeAt: "${installPath}"
     modType: solarpunk-root
 
-  # --- Priority 26: Content/ or Config/ at the archive root → project folder ---
+  # --- Priority 17: Content folder (project-relative trees: Content/, Config/, Binaries/) ---
+  # Sibling of `root` for archives laid out from the project folder rather than
+  # the install root. Whole tree deploys to ${gamePath}, so a bare Binaries/ tree
+  # correctly lands under the project folder.
   - id: content-folder
-    priority: 26
+    priority: 17
     when:
       any:
         - { hasFile: "Content/**" }
         - { hasFile: "Config/**" }
-    unless:
-      any:
-        - { hasFile: "**/Solarpunk/**" }
-        - { hasFile: "**/Engine/**" }
-        - { hasFile: "**/Binaries/**" }
-        - { hasFile: "**/LogicMods/**" }
-        - { hasFile: "**/Scripts/*.lua" }
-        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "Binaries/**" }
     anchor: "**/*"
     take: archive-root
     placeAt: "${gamePath}"
@@ -286,11 +280,16 @@ validators:
     assert: { matched: logicmods }
 
   - id: ue4ss-lua-validator
-    name: Lua mods (Scripts/*.lua, no loader) match ue4ss-lua
+    name: Bare lua mods (Scripts/*.lua, no loader, not game-relative) match ue4ss-lua
     when:
       all:
         - { hasFile: "**/Scripts/*.lua" }
         - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        # Game-relative archives are claimed by root/content-folder and deploy intact.
+        - not: { hasFile: "Solarpunk/**" }
+        - not: { hasFile: "Engine/**" }
+        - not: { hasFile: "Content/**" }
+        - not: { hasFile: "Binaries/**" }
     assert: { matched: ue4ss-lua }
 
   # Placement guard: regardless of which pak installer wins, IoStore pak payloads
@@ -454,3 +453,20 @@ tests:
         plan:
           - ${installPath}/Solarpunk/Content/Paks/foo.pak
           - ${installPath}/Engine/Content/bar.uasset
+
+    # --- Mixed game-relative mod (UE4SS lua + asset-replacement pak) ---
+    # A single archive laid out from the install root carrying BOTH a UE4SS Lua
+    # payload and a pak must deploy as one intact tree — the pak must NOT be
+    # dropped by the narrower ue4ss-lua installer claiming the archive.
+    - name: "root: mixed lua+pak game-relative archive keeps paks"
+      archive:
+        - Solarpunk/Binaries/Win64/ue4ss/Mods/Foo/Scripts/main.lua
+        - Solarpunk/Binaries/Win64/ue4ss/Mods/Foo/enabled.txt
+        - Solarpunk/Content/Paks/~mods/Foo_P.pak
+      expect:
+        matched: root
+        modType: solarpunk-root
+        plan:
+          - ${installPath}/Solarpunk/Binaries/Win64/ue4ss/Mods/Foo/Scripts/main.lua
+          - ${installPath}/Solarpunk/Binaries/Win64/ue4ss/Mods/Foo/enabled.txt
+          - ${installPath}/Solarpunk/Content/Paks/~mods/Foo_P.pak
