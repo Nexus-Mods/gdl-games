@@ -41,13 +41,17 @@ context:
   ue4ssModsPath: ${gamePath}/Binaries/${arch}/ue4ss/Mods
 
 modTypes:
-  - { id: subnautica2-pak,            name: "Paks (~mods)",             path: "${pakModsPath}" }
-  - { id: subnautica2-logicmods,      name: "LogicMods (Blueprint paks)", path: "${logicModsPath}" }
+  # Deploy roots. A modType's `path` is the runtime deploy root for files of that
+  # type; each installer's `placeAt` MUST resolve to the same path (enforced by
+  # GDL114). Asset paks and blueprint (LogicMods) paks both deploy under
+  # Content/Paks — blueprint mods just carry their LogicMods/ subfolder in the
+  # stripped relative path, so both modTypes share the ${paksPath} root.
+  - { id: subnautica2-pak,            name: "Paks (Content/Paks)",        path: "${paksPath}" }
+  - { id: subnautica2-logicmods,      name: "LogicMods (Blueprint paks)", path: "${paksPath}" }
   - { id: subnautica2-ue4ss,          name: "UE4SS (Lua scripts)",      path: "${ue4ssModsPath}" }
   - { id: subnautica2-ue4ss-injector, name: "UE4SS Injector",           path: "${ue4ssInjectorPath}" }
   - { id: subnautica2-root,           name: "Root (game folder)",       path: "${installPath}" }
   - { id: subnautica2-contentfolder,  name: "Content folder",           path: "${gamePath}" }
-  - { id: subnautica2-pakalt,         name: "Paks (no ~mods)",          path: "${paksPath}" }
 
 installers:
   # --- Priority 15: UE4SS Injector (dwmapi.dll, xinput1_4.dll, UE4SS-settings.ini) ---
@@ -107,95 +111,53 @@ installers:
     placeAt: "${ue4ssModsPath}"
     modType: subnautica2-ue4ss
 
-  # --- Priority 25: Root (Subnautica2/, Engine/, or Binaries/ segments) ---
+  # --- Priority 10: Root (game-relative archives laid out from the install root) ---
+  # Wins over the payload-specific installers below: when an archive is already
+  # arranged from the game's install root (a top-level Subnautica2/ or Engine/
+  # segment), the whole tree is deployed as-is. This is what keeps MIXED mods
+  # intact — e.g. an archive carrying both a UE4SS Lua payload (under Binaries/)
+  # and an asset-replacement pak (under Content/Paks/) lands every file in the
+  # right place instead of a narrow installer claiming it and dropping the rest.
   - id: root
-    priority: 25
+    priority: 10
     when:
       any:
-        - { hasFile: "**/Subnautica2/**" }
-        - { hasFile: "**/Engine/**" }
-        - { hasFile: "**/Binaries/**" }
-    unless:
-      any:
-        - { hasFile: "**/LogicMods/**" }
-        - { hasFile: "**/Scripts/*.lua" }
-        - { hasFile: "**/enabled.txt" }
-        - { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "Subnautica2/**" }
+        - { hasFile: "Engine/**" }
     anchor: "**/*"
     take: archive-root
     placeAt: "${installPath}"
     modType: subnautica2-root
 
-  # --- Priority 26: Content folder (Content/ or Config/ at archive root) ---
+  # --- Priority 11: Content folder (project-relative trees: Content/, Config/, Binaries/) ---
+  # Sibling of `root` for archives laid out from the game PROJECT folder rather
+  # than the install root. Whole tree deploys to ${gamePath} (= installPath on
+  # Xbox, installPath/Subnautica2 elsewhere), so Binaries/ correctly lands under
+  # the project folder. Like `root`, it wins over the narrow installers below.
   - id: content-folder
-    priority: 26
+    priority: 11
     when:
       any:
         - { hasFile: "Content/**" }
         - { hasFile: "Config/**" }
-    unless:
-      any:
-        - { hasFile: "**/LogicMods/**" }
-        - { hasFile: "**/Scripts/*.lua" }
-        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "Binaries/**" }
     anchor: "**/*"
     take: archive-root
     placeAt: "${gamePath}"
     modType: subnautica2-contentfolder
 
-  # --- Priority 28: Pak alt (Paks/ folder without ~mods) ---
-  - id: pak-alt
-    priority: 28
-    when:
-      all:
-        - { hasFile: "**/*.pak" }
-        - { hasFile: "**/Paks/**" }
-    unless:
-      any:
-        - { hasFile: "**/~mods/**" }
-        - { hasFile: "**/LogicMods/**" }
-        - { hasFile: "**/Scripts/*.lua" }
-        - { hasFile: "**/enabled.txt" }
-    anchor: "**/Paks/"
-    take: self
-    placeAt: "${contentPath}"
-    modType: subnautica2-pakalt
-
-  # --- Priority 29: IO Store only (utoc+ucas without pak) ---
-  - id: pak-iostore
-    priority: 29
-    when: { hasFile: "**/*.utoc" }
-    unless:
-      any:
-        - { hasFile: "**/*.pak" }
-        - { hasFile: "**/LogicMods/**" }
-        - { hasFile: "**/Scripts/*.lua" }
-        - { hasFile: "**/enabled.txt" }
-        - { hasFile: "**/Subnautica2/**" }
-        - { hasFile: "**/Engine/**" }
-        - { hasFile: "**/Binaries/**" }
-        - { hasFile: "**/Paks/**" }
-    anchor: "**/*.utoc"
-    take: parent
-    placeAt: "${pakModsPath}"
-    modType: subnautica2-pak
-
-  # --- Priority 30: Pak (default, flatten into ~mods) ---
+  # --- Priority 28: Pak (default fallback for asset-replacement paks) ---
+  # The catch-all for plain asset paks (and IO-store .utoc/.ucas, with or without
+  # a sibling .pak). Flattens the pak set to its basename under Content/Paks (the
+  # broad, reliable mods folder). Everything more specific — game-relative trees
+  # (root/content-folder), blueprint paks (logicmods), and UE4SS lua mods — has a
+  # lower priority number and wins first, so this needs no `unless` guard.
   - id: pak
-    priority: 30
-    when: { hasFile: "**/*.pak" }
-    unless:
-      any:
-        - { hasFile: "**/LogicMods/**" }
-        - { hasFile: "**/Scripts/*.lua" }
-        - { hasFile: "**/enabled.txt" }
-        - { hasFile: "**/Subnautica2/**" }
-        - { hasFile: "**/Engine/**" }
-        - { hasFile: "**/Binaries/**" }
-        - { hasFile: "**/Paks/**" }
-    anchor: "**/*.pak"
+    priority: 28
+    when: { hasFile: "**/*.{pak,utoc}" }
+    anchor: "**/*.{pak,utoc}"
     take: parent
-    placeAt: "${pakModsPath}"
+    placeAt: "${paksPath}"
     modType: subnautica2-pak
 
 discovery:
@@ -316,16 +278,20 @@ tests:
           - ${ue4ssModsPath}/MyMod/Scripts/main.lua
           - ${ue4ssModsPath}/MyMod/enabled.txt
 
-    - name: "ue4ss: deep game-relative path collapsed"
+    # A game-relative UE4SS lua mod (laid out from the install root) now deploys
+    # as an intact tree via `root`. The files land at the SAME physical location
+    # the old `ue4ss-lua` collapse produced, and the did-deploy mods.txt hook
+    # still picks them up (it scans the ue4ss Mods dir regardless of modType).
+    - name: "root: deep game-relative ue4ss mod kept as-is"
       archive:
         - Subnautica2/Binaries/Win64/ue4ss/Mods/CoolMod/Scripts/main.lua
         - Subnautica2/Binaries/Win64/ue4ss/Mods/CoolMod/enabled.txt
       expect:
-        matched: ue4ss-lua
-        modType: subnautica2-ue4ss
+        matched: root
+        modType: subnautica2-root
         plan:
-          - ${ue4ssModsPath}/CoolMod/Scripts/main.lua
-          - ${ue4ssModsPath}/CoolMod/enabled.txt
+          - ${installPath}/Subnautica2/Binaries/Win64/ue4ss/Mods/CoolMod/Scripts/main.lua
+          - ${installPath}/Subnautica2/Binaries/Win64/ue4ss/Mods/CoolMod/enabled.txt
 
     - name: "ue4ss: lua mod with extra asset files"
       archive:
@@ -378,14 +344,14 @@ tests:
           - ${installPath}/Subnautica2/Content/Paks/foo.pak
           - ${installPath}/Engine/Content/bar.uasset
 
-    - name: "root: Binaries segment"
+    - name: "content-folder: bare Binaries/ tree lands under the project folder"
       archive:
         - Binaries/Win64/mod.dll
       expect:
-        matched: root
-        modType: subnautica2-root
+        matched: content-folder
+        modType: subnautica2-contentfolder
         plan:
-          - ${installPath}/Binaries/Win64/mod.dll
+          - ${gamePath}/Binaries/Win64/mod.dll
 
     # --- Content Folder ---
     - name: "content-folder: Content/ at archive root"
@@ -408,33 +374,7 @@ tests:
         plan:
           - ${gamePath}/Config/settings.ini
 
-    # --- Pak Alt ---
-    - name: "pak-alt: Paks/ folder without ~mods"
-      archive:
-        - mod/Paks/sub/x.pak
-        - mod/Paks/sub/x.ucas
-        - mod/Paks/sub/x.utoc
-      expect:
-        matched: pak-alt
-        modType: subnautica2-pakalt
-        plan:
-          - ${contentPath}/Paks/sub/x.pak
-          - ${contentPath}/Paks/sub/x.ucas
-          - ${contentPath}/Paks/sub/x.utoc
-
-    # --- IO Store Only ---
-    - name: "pak-iostore: utoc+ucas without pak"
-      archive:
-        - SomeMod/x_P.utoc
-        - SomeMod/x_P.ucas
-      expect:
-        matched: pak-iostore
-        modType: subnautica2-pak
-        plan:
-          - ${pakModsPath}/x_P.utoc
-          - ${pakModsPath}/x_P.ucas
-
-    # --- Pak (default) ---
+    # --- Pak (default fallback, flattened into Content/Paks) ---
     - name: "pak: single pak file"
       archive:
         - SomeMod/Cool.pak
@@ -442,7 +382,7 @@ tests:
         matched: pak
         modType: subnautica2-pak
         plan:
-          - ${pakModsPath}/Cool.pak
+          - ${paksPath}/Cool.pak
 
     - name: "pak: pak+ucas+utoc triplet flattened"
       archive:
@@ -453,9 +393,9 @@ tests:
         matched: pak
         modType: subnautica2-pak
         plan:
-          - ${pakModsPath}/x_P.pak
-          - ${pakModsPath}/x_P.ucas
-          - ${pakModsPath}/x_P.utoc
+          - ${paksPath}/x_P.pak
+          - ${paksPath}/x_P.ucas
+          - ${paksPath}/x_P.utoc
 
     - name: "pak: deeply nested pak flattened to basename"
       archive:
@@ -464,7 +404,36 @@ tests:
         matched: pak
         modType: subnautica2-pak
         plan:
-          - ${pakModsPath}/MyMod.pak
+          - ${paksPath}/MyMod.pak
+
+    # IO-store-only mods (utoc/ucas, no sibling .pak) are the same shape — the
+    # merged `pak` installer handles them via the {pak,utoc} anchor.
+    - name: "pak: utoc+ucas without a .pak"
+      archive:
+        - SomeMod/x_P.utoc
+        - SomeMod/x_P.ucas
+      expect:
+        matched: pak
+        modType: subnautica2-pak
+        plan:
+          - ${paksPath}/x_P.utoc
+          - ${paksPath}/x_P.ucas
+
+    # A bare archive that nests its paks under a Paks/ folder (not game-relative)
+    # is flattened into Content/Paks. Game-relative trees keep their structure via
+    # `root`/`content-folder`; this only affects loose, non-rooted archives.
+    - name: "pak: paks inside a bare Paks/ folder are flattened into Content/Paks"
+      archive:
+        - mod/Paks/sub/x.pak
+        - mod/Paks/sub/x.ucas
+        - mod/Paks/sub/x.utoc
+      expect:
+        matched: pak
+        modType: subnautica2-pak
+        plan:
+          - ${paksPath}/x.pak
+          - ${paksPath}/x.ucas
+          - ${paksPath}/x.utoc
 
     # --- Priority / losesTo scenarios ---
     - name: "pak loses to logicmods"
@@ -482,11 +451,40 @@ tests:
         matched: ue4ss-lua
         modType: subnautica2-ue4ss
 
-    - name: "content-folder loses to logicmods"
+    # A Content-rooted archive (laid out from the project folder) is a game-relative
+    # tree, so `content-folder` keeps it intact — the LogicMods/ subtree included —
+    # rather than the narrower `logicmods` installer carving it out.
+    - name: "content-folder: Content-rooted LogicMods tree kept intact"
       archive:
         - Content/Paks/LogicMods/X.pak
       expect:
-        matched: logicmods
+        matched: content-folder
+        modType: subnautica2-contentfolder
+        plan:
+          - ${gamePath}/Content/Paks/LogicMods/X.pak
+
+    # --- Mixed game-relative mod (UE4SS lua + asset-replacement pak) ---
+    # Real-world shape (NotOnlyTitanium, modId 185): a single archive laid out from
+    # the install root carrying BOTH a UE4SS Lua payload and a pak payload. It must
+    # deploy as one intact tree — the pak triplet must NOT be dropped.
+    - name: "root: mixed lua+pak game-relative archive keeps paks"
+      archive:
+        - Subnautica2/Binaries/Win64/ue4ss/Mods/NotOnlyTitanium/Scripts/config.lua
+        - Subnautica2/Binaries/Win64/ue4ss/Mods/NotOnlyTitanium/Scripts/main.lua
+        - Subnautica2/Binaries/Win64/ue4ss/Mods/NotOnlyTitanium/enabled.txt
+        - Subnautica2/Content/Paks/~mods/NotOnlyTitaniumSKIN_P.pak
+        - Subnautica2/Content/Paks/~mods/NotOnlyTitaniumSKIN_P.ucas
+        - Subnautica2/Content/Paks/~mods/NotOnlyTitaniumSKIN_P.utoc
+      expect:
+        matched: root
+        modType: subnautica2-root
+        plan:
+          - ${installPath}/Subnautica2/Binaries/Win64/ue4ss/Mods/NotOnlyTitanium/Scripts/config.lua
+          - ${installPath}/Subnautica2/Binaries/Win64/ue4ss/Mods/NotOnlyTitanium/Scripts/main.lua
+          - ${installPath}/Subnautica2/Binaries/Win64/ue4ss/Mods/NotOnlyTitanium/enabled.txt
+          - ${installPath}/Subnautica2/Content/Paks/~mods/NotOnlyTitaniumSKIN_P.pak
+          - ${installPath}/Subnautica2/Content/Paks/~mods/NotOnlyTitaniumSKIN_P.ucas
+          - ${installPath}/Subnautica2/Content/Paks/~mods/NotOnlyTitaniumSKIN_P.utoc
 
 validators:
   - id: logicmods-validator
@@ -496,11 +494,17 @@ validators:
       matched: logicmods
 
   - id: ue4ss-lua-validator
-    name: Archives with Scripts/*.lua should match ue4ss-lua
+    name: Bare archives with Scripts/*.lua should match ue4ss-lua
     when:
       all:
         - { hasFile: "**/Scripts/*.lua" }
         - not: { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        # Game-relative archives (laid out from the install/project root) are
+        # claimed by `root`/`content-folder` and deploy as an intact tree.
+        - not: { hasFile: "Subnautica2/**" }
+        - not: { hasFile: "Engine/**" }
+        - not: { hasFile: "Content/**" }
+        - not: { hasFile: "Binaries/**" }
     assert:
       matched: ue4ss-lua
 

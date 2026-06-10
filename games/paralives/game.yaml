@@ -20,6 +20,7 @@ stores:
 
 context:
   localModsPath: "${appDataLocalLow}/Paralives/Paralives"
+  settingsPath: "${installPath}/Main.mod/Settings"
 
 modTypes:
   - id: paralives-mod
@@ -28,6 +29,13 @@ modTypes:
   - id: paralives-overlay
     name: Paralives Overlay
     path: "${installPath}"
+  # Bare .setting overrides deploy into the install dir's Main.mod/Settings (the
+  # same folder the base game reads, see discovery.version above). Distinct from
+  # the overlay modType so files actually land here at runtime (the deploy root
+  # is the modType path, not the installer's placeAt).
+  - id: paralives-settings
+    name: Paralives Settings Override
+    path: "${settingsPath}"
 
 installers:
   # .mod folders (contain .mod.meta) → LocalLow
@@ -49,8 +57,8 @@ installers:
         - not: { hasFile: "**/*.mod.meta" }
     anchor: "**/*.setting"
     take: archive-root
-    placeAt: "Main.mod/Settings"
-    modType: paralives-overlay
+    placeAt: "${settingsPath}"
+    modType: paralives-settings
 
   # Everything else → install dir overlay (catch-all)
   - id: paralives-overlay
@@ -121,10 +129,10 @@ tests:
         - DisableWeather.setting.meta
       expect:
         matched: paralives-settings
-        modType: paralives-overlay
+        modType: paralives-settings
         plan:
-          - Main.mod/Settings/DisableWeather.setting
-          - Main.mod/Settings/DisableWeather.setting.meta
+          - ${settingsPath}/DisableWeather.setting
+          - ${settingsPath}/DisableWeather.setting.meta
 
     - name: loose file overlay drops to install root
       archive:

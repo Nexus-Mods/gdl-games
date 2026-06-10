@@ -53,13 +53,17 @@ context:
 
 modTypes:
   - { id: solarpunk-pak,            name: "Paks (~mods)",               path: "${pakModsPath}" }
-  - { id: solarpunk-logicmods,      name: "LogicMods (Blueprint paks)", path: "${logicModsPath}" }
+  # Deploys under Content/Paks; the LogicMods/ subfolder rides along in each
+  # file's stripped relative path (so placeAt == this path; see GDL114).
+  - { id: solarpunk-logicmods,      name: "LogicMods (Blueprint paks)", path: "${paksPath}" }
   - { id: solarpunk-ue4ss,          name: "UE4SS (Lua mods)",           path: "${ue4ssModsPath}" }
   - { id: solarpunk-ue4ss-injector, name: "UE4SS (loader)",             path: "${binariesPath}" }
   - { id: solarpunk-binaries,       name: "Binaries (ReShade / DLL plugins)", path: "${binariesPath}" }
   - { id: solarpunk-root,           name: "Root (game folder)",         path: "${installPath}" }
   - { id: solarpunk-contentfolder,  name: "Content folder",             path: "${gamePath}" }
-  - { id: solarpunk-pakalt,         name: "Paks (no ~mods)",            path: "${paksPath}" }
+  # Deploys under Content/; the Paks/ subfolder rides along in each file's
+  # stripped relative path (so placeAt == this path; see GDL114).
+  - { id: solarpunk-pakalt,         name: "Paks (no ~mods)",            path: "${contentPath}" }
 
 installers:
   # --- Priority 15: UE4SS loader (dwmapi/xinput proxy or UE4SS-settings.ini) → Binaries ---
