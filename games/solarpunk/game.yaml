@@ -1,5 +1,5 @@
 gdl: 1
-version: 0.0.2   # extension version — drives info.json, the release tag, and the zip name
+version: 0.1.0   # extension version — drives info.json, the release tag, and the zip name
 
 # Solarpunk (rokaplay / Cyberwave) — Unreal Engine 5 (5.7.x), IoStore paks.
 # Supports: pak mods (Content/Paks/~mods), LogicMods, UE4SS (loader + Lua mods),
