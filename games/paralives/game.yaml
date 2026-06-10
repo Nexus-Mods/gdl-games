@@ -8,6 +8,7 @@ game:
   requiredFiles:
     - Paralives.exe
   logo: gameart.webp
+  author: Nexus Mods
   nexusDomain: paralives
 
 discovery:

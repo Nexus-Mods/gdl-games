@@ -12,6 +12,7 @@ game:
   executable: Solarpunk.exe          # UE5 bootstrap launcher at the install root
   requiredFiles: [Solarpunk.exe]
   logo: gameart.webp
+  author: Nexus Mods
   nexusDomain: solarpunk
   details:
     steamAppId: 1805110

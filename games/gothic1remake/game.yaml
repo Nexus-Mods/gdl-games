@@ -7,6 +7,7 @@ game:
   executable: G1R-Win64-Shipping.exe
   requiredFiles: [G1R-Win64-Shipping.exe]
   logo: gameart.webp
+  author: Nexus Mods
   nexusDomain: gothic1remake
   details:
     steamAppId: 1297900
