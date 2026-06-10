@@ -288,6 +288,18 @@ validators:
         - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
     assert: { matched: ue4ss-lua }
 
+  # Placement guard: regardless of which pak installer wins, IoStore pak payloads
+  # must land under Content/Paks and never loose at the game-folder root (a .ucas
+  # at the root is silently ignored by UE and is a common mis-route).
+  - id: pak-payload-placement
+    name: .pak/.ucas/.utoc install under Content/Paks, never at the game root
+    when: { hasFile: "**/*.{pak,ucas,utoc}" }
+    assert:
+      placement:
+        - files: "**/*.{pak,ucas,utoc}"
+          mustMatch: "**/Content/Paks/**"
+          mustNotMatch: "${installPath}/*"
+
 tests:
   corpus: nexus
   cases:
