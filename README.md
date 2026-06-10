@@ -4,10 +4,11 @@ Monorepo of [Nexus Mods](https://www.nexusmods.com/) **Vortex** game extensions,
 single shared [GDL](https://github.com/Nexus-Mods/game-description-language) (Game Description
 Language) toolchain.
 
-Each game is just a declarative `game.yaml` (plus a `gameart.webp` logo) under `games/<id>/`.
-GDL compiles that into a bundled Vortex extension. There is **one** copy of the GDL toolchain
-for the whole repo (the `gdl/` submodule), and **one** set of orchestration / CI / packaging
-config at the root — no per-game `package.json`, `vitest.config`, or workflow files.
+Each game is a declarative `game.yaml` plus a `gameart.webp` logo under `games/<id>/` (and an
+optional `src/hooks.ts` for game-specific logic such as version detection or deploy hooks). GDL
+compiles that into a bundled Vortex extension. There is **one** copy of the GDL toolchain for the
+whole repo (the `gdl/` submodule), and **one** set of orchestration / CI / packaging config at the
+root — no per-game `package.json`, `vitest.config`, or workflow files.
 
 Task running is handled by [Nx](https://nx.dev): each `games/*/game.yaml` is detected as an Nx
 project (via an inference plugin — no per-game config), giving cached, parallel `build`/`test`/
@@ -16,13 +17,17 @@ project (via an inference plugin — no per-game config), giving cached, paralle
 ```
 gdl-games/
 ├── gdl/                       # shared GDL toolchain (git submodule, built once)
-├── games/
-│   └── solarpunk/             # one folder per game — just two files:
-│       ├── game.yaml          #   the game definition (incl. top-level `version:`)
-│       └── gameart.webp       #   the logo
+├── games/                     # one folder per game (007firstlight, gothic1remake,
+│   ├── solarpunk/             #   paralives, solarpunk, subnautica2)
+│   │   ├── game.yaml          #   the game definition (incl. top-level `version:`)
+│   │   └── gameart.webp       #   the logo
+│   └── subnautica2/           # games needing custom logic also have:
+│       └── src/hooks.ts       #   version detection / deploy hooks
 ├── tools/nx/gdl-plugin.js     # Nx inference plugin: game.yaml → project + targets
 ├── nx.json                    # Nx caching inputs/outputs + targetDefaults
 ├── vitest.config.ts           # one config that tests every game
+├── tsconfig.base.json         # minimal stub — required for Nx local-plugin resolution
+├── .claude/skills/            # /implement-game-extension skill (scaffolds a new game)
 ├── .github/workflows/ci.yml   # build/test (Nx affected) + release on version bump
 └── package.json               # root scripts (wrap nx)
 ```
@@ -105,9 +110,14 @@ skipped. A placeholder guard refuses to publish any game whose `game.yaml` still
 
 ## Adding a new game
 
-Create `games/<id>/game.yaml` and drop in a `games/<id>/gameart.webp`. That's it — no
-`package.json`, no `vitest.config`, no workflow. The root scripts and CI pick up any
-`games/*/game.yaml` automatically.
+The guided path is the **`/implement-game-extension`** skill: give it the Nexus site/extension id
+and the game name, and it researches the game, writes `game.yaml`, fetches the art, supports every
+mod currently on the game's Nexus page, and gets the build green.
+
+To do it by hand: create `games/<id>/game.yaml` and drop in a `games/<id>/gameart.webp`. That's it
+— no `package.json`, no `vitest.config`, no workflow (add a `src/hooks.ts` only if the game needs
+version-detection or deploy hooks). The root scripts and CI pick up any `games/*/game.yaml`
+automatically.
 
 A minimal `game.yaml`:
 
