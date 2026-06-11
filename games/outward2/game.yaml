@@ -1,0 +1,485 @@
+gdl: 1
+version: 0.0.1   # extension version — drives info.json, the release tag, and the zip name
+
+# Outward 2 (Nine Dots Studio) — Unreal Engine 5. The original Outward was Unity;
+# the sequel switched to UE5, so this uses the standard UE5 stack (NOT BepInEx).
+# Supports: pak mods (Content/Paks/~mods), LogicMods, UE4SS (loader + Lua mods),
+# ReShade presets, loose native DLL plugins, and whole-folder "root" mods.
+#
+# UNRELEASED at scaffold time (Steam Early Access 2026-07-07). The UE project folder
+# is "otw2_ue" — CONFIRMED from the real Nexus mods (their archives are laid out as
+# otw2_ue/Binaries/... and otw2_ue-Windows_*.pak). The root launcher executable is NOT
+# yet confirmed against a real build (flagged UNVERIFIED below); confirm it against the
+# shipping depot at release. Note the codename project folder suggests the root exe may
+# also be otw2_ue.exe rather than Outward2.exe.
+
+game:
+  id: outward2
+  name: Outward 2
+  executable: Outward2.exe            # UNVERIFIED — UE5 root launcher; confirm at release
+  requiredFiles: [Outward2.exe]       # UNVERIFIED — keep in sync with executable
+  logo: gameart.webp
+  author: Nexus Mods
+  nexusDomain: outward2
+  details:
+    steamAppId: 2849490
+    # Epic ("Coming Soon", slug outward-2-fae51e) and GOG are announced but the Epic
+    # manifest AppName isn't published yet — omitted rather than guessed. Xbox/Game Pass
+    # is not an Early-Access platform. Add stores once their ids are confirmed.
+    supportsSymlinks: true
+    gameProjectFolder: otw2_ue         # CONFIRMED from real mod layout (otw2_ue/...)
+    ignoreConflicts: [UE4SS-settings.ini, enabled.txt]
+
+stores:
+  steam: "2849490"
+
+context:
+  arch:
+    storeBranch:
+      default: Win64
+  gamePath:
+    storeBranch:
+      default: ${installPath}/otw2_ue    # matches gameProjectFolder (confirmed)
+
+  pakModsPath:   ${gamePath}/Content/Paks/~mods
+  logicModsPath: ${gamePath}/Content/Paks/LogicMods
+  paksPath:      ${gamePath}/Content/Paks
+  contentPath:   ${gamePath}/Content
+
+  # UE4SS / ReShade / loose DLL plugins all live next to the shipping exe.
+  binariesPath:  ${gamePath}/Binaries/${arch}
+  ue4ssRootPath: ${gamePath}/Binaries/${arch}/ue4ss
+  ue4ssModsPath: ${gamePath}/Binaries/${arch}/ue4ss/Mods
+
+modTypes:
+  - { id: outward2-pak,            name: "Paks (~mods)",               path: "${pakModsPath}" }
+  # Deploys under Content/Paks; the LogicMods/ subfolder rides along in each
+  # file's stripped relative path (so placeAt == this path; see GDL114).
+  - { id: outward2-logicmods,      name: "LogicMods (Blueprint paks)", path: "${paksPath}" }
+  - { id: outward2-ue4ss,          name: "UE4SS (Lua mods)",           path: "${ue4ssModsPath}" }
+  - { id: outward2-ue4ss-injector, name: "UE4SS (loader)",             path: "${binariesPath}" }
+  - { id: outward2-binaries,       name: "Binaries (ReShade / DLL plugins)", path: "${binariesPath}" }
+  - { id: outward2-root,           name: "Root (game folder)",         path: "${installPath}" }
+  - { id: outward2-contentfolder,  name: "Content folder",             path: "${gamePath}" }
+  # Deploys under Content/; the Paks/ subfolder rides along in each file's
+  # stripped relative path (so placeAt == this path; see GDL114).
+  - { id: outward2-pakalt,         name: "Paks (no ~mods)",            path: "${contentPath}" }
+
+installers:
+  # --- Priority 15: UE4SS loader (dwmapi/xinput proxy or UE4SS-settings.ini) → Binaries ---
+  - id: ue4ss-injector
+    priority: 15
+    when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: outward2-ue4ss-injector
+
+  # --- Priority 18: ReShade preset (ReShade.ini, strip wrapper) → Binaries ---
+  - id: reshade
+    priority: 18
+    when: { hasFile: "**/ReShade.ini" }
+    unless: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/ReShade.ini"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: outward2-binaries
+
+  # --- Priority 20: LogicMods (Blueprint paks under LogicMods/) → Content/Paks ---
+  - id: logicmods
+    priority: 20
+    when: { hasFile: "**/LogicMods/**" }
+    anchor: "**/LogicMods/"
+    take: self
+    placeAt: "${paksPath}"
+    modType: outward2-logicmods
+
+  # --- Priority 22: UE4SS Lua (Scripts/*.lua present) → ue4ss/Mods ---
+  - id: ue4ss-lua
+    priority: 22
+    when: { hasFile: "**/Scripts/*.lua" }
+    unless: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/Scripts/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: outward2-ue4ss
+
+  # --- Priority 23: UE4SS Lua (enabled.txt only) → ue4ss/Mods ---
+  - id: ue4ss-lua-enabled
+    priority: 23
+    when: { hasFile: "**/enabled.txt" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/enabled.txt"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: outward2-ue4ss
+
+  # --- Priority 24: UE4SS Lua (bare .lua, no Scripts/ dir) → ue4ss/Mods ---
+  - id: ue4ss-lua-bare
+    priority: 24
+    when: { hasFile: "**/*.lua" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: outward2-ue4ss
+
+  # --- Priority 16: Root (game-relative archives laid out from the install root) ---
+  # Positioned AFTER the UE4SS loader but BEFORE logicmods/ue4ss-lua/pak. When an
+  # archive is arranged from the install root (top-level otw2_ue/ or Engine/), the
+  # whole tree deploys as-is, so a MIXED mod (lua under Binaries/ + a pak under
+  # Content/Paks/) lands every file in place instead of ue4ss-lua claiming it and
+  # dropping the pak.
+  - id: root
+    priority: 16
+    when:
+      any:
+        - { hasFile: "otw2_ue/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}"
+    modType: outward2-root
+
+  # --- Priority 17: Content folder (project-relative trees: Content/, Config/, Binaries/) ---
+  - id: content-folder
+    priority: 17
+    when:
+      any:
+        - { hasFile: "Content/**" }
+        - { hasFile: "Config/**" }
+        - { hasFile: "Binaries/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${gamePath}"
+    modType: outward2-contentfolder
+
+  # --- Priority 27: Loose native DLL plugin (e.g. winmm/dll-injector mods) → Binaries ---
+  - id: native-dll
+    priority: 27
+    when: { hasFile: "**/*.dll" }
+    unless:
+      any:
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/ue4ss/**" }
+        - { hasFile: "**/ReShade.ini" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/otw2_ue/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/*.dll"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: outward2-binaries
+
+  # --- Priority 28: A Paks/ folder bundled in the archive (not ~mods) → Content/Paks ---
+  - id: pak-alt
+    priority: 28
+    when:
+      all:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Paks/**" }
+    unless:
+      any:
+        - { hasFile: "**/~mods/**" }
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/otw2_ue/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/Paks/"
+    take: self
+    placeAt: "${contentPath}"
+    modType: outward2-pakalt
+
+  # --- Priority 29: IO Store mod (utoc/ucas without a .pak) → ~mods ---
+  - id: pak-iostore
+    priority: 29
+    when: { hasFile: "**/*.utoc" }
+    unless:
+      any:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/otw2_ue/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+        - { hasFile: "**/LogicMods/**" }
+    anchor: "**/*.utoc"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: outward2-pak
+
+  # --- Priority 30: Default pak mod → flatten into ~mods ---
+  - id: pak
+    priority: 30
+    when: { hasFile: "**/*.pak" }
+    unless:
+      any:
+        - { hasFile: "**/otw2_ue/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+        - { hasFile: "**/LogicMods/**" }
+    anchor: "**/*.pak"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: outward2-pak
+
+setup:
+  ensureDirs:
+    - ${pakModsPath}
+
+toolbarActions:
+  - id: open-ue4ss-settings
+    title: Open UE4SS Settings INI
+    priority: 200
+    target: { openFile: "${ue4ssRootPath}/UE4SS-settings.ini" }
+
+  - id: open-nexus-page
+    title: Open Nexus Page
+    priority: 201
+    target: { openUrl: "https://www.nexusmods.com/outward2" }
+
+# nexus: block omitted until the file-group id is known. The Vortex extension page is
+# nexusmods.com/site/mods/1980 (modId 1980). At release, add:
+#   nexus:
+#     modId: 1980
+#     fileGroupId: <from the Nexus upload page>
+#     displayName: Outward 2 Support for Vortex
+
+# Corpus validators: assertions checked against real Nexus archives via
+# `gdl test:corpus --fetch` (needs NEXUS_API_KEY). They guard the routing of the
+# real mod categories against rule regressions.
+validators:
+  - id: injector-validator
+    name: UE4SS loader archives (dwmapi/xinput/UE4SS-settings.ini) match ue4ss-injector
+    when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    assert: { matched: ue4ss-injector }
+
+  - id: reshade-validator
+    name: ReShade presets (ReShade.ini, no loader) match reshade
+    when:
+      all:
+        - { hasFile: "**/ReShade.ini" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    assert: { matched: reshade }
+
+  - id: logicmods-validator
+    name: Archives with LogicMods paks match logicmods
+    when: { hasFile: "**/LogicMods/**/*.pak" }
+    assert: { matched: logicmods }
+
+  # Placement guard: regardless of which pak installer wins, IoStore pak payloads
+  # must land under Content/Paks and never loose at the game-folder root (a .ucas
+  # at the root is silently ignored by UE and is a common mis-route).
+  - id: pak-payload-placement
+    name: .pak/.ucas/.utoc install under Content/Paks, never at the game root
+    when: { hasFile: "**/*.{pak,ucas,utoc}" }
+    assert:
+      placement:
+        - files: "**/*.{pak,ucas,utoc}"
+          mustMatch: "**/Content/Paks/**"
+          mustNotMatch: "${installPath}/*"
+
+tests:
+  corpus: nexus
+  cases:
+    # --- UE4SS loader ---
+    - name: "ue4ss-injector: dwmapi.dll + ue4ss tree dropped into Binaries"
+      archive:
+        - dwmapi.dll
+        - tbb12.dll
+        - ue4ss/UE4SS-settings.ini
+        - ue4ss/Mods/keep_me.txt
+      expect:
+        matched: ue4ss-injector
+        modType: outward2-ue4ss-injector
+        plan:
+          - ${binariesPath}/dwmapi.dll
+          - ${binariesPath}/tbb12.dll
+          - ${binariesPath}/ue4ss/UE4SS-settings.ini
+          - ${binariesPath}/ue4ss/Mods/keep_me.txt
+
+    # --- ReShade preset ---
+    - name: "reshade: preset folder stripped into Binaries"
+      archive:
+        - WarmSun/ReShade.ini
+        - WarmSun/WarmSun.ini
+        - WarmSun/reshade-shaders/Shaders/Clarity.fx
+      expect:
+        matched: reshade
+        modType: outward2-binaries
+        plan:
+          - ${binariesPath}/ReShade.ini
+          - ${binariesPath}/WarmSun.ini
+          - ${binariesPath}/reshade-shaders/Shaders/Clarity.fx
+
+    # --- Loose native DLL plugin ---
+    - name: "native-dll: bare dll placed in Binaries"
+      archive:
+        - SomePlugin.dll
+      expect:
+        matched: native-dll
+        modType: outward2-binaries
+        plan:
+          - ${binariesPath}/SomePlugin.dll
+
+    # --- UE4SS Lua ---
+    - name: "ue4ss: lua mod with Scripts folder"
+      archive:
+        - MyMod/Scripts/main.lua
+        - MyMod/enabled.txt
+      expect:
+        matched: ue4ss-lua
+        modType: outward2-ue4ss
+        plan:
+          - ${ue4ssModsPath}/MyMod/Scripts/main.lua
+          - ${ue4ssModsPath}/MyMod/enabled.txt
+
+    # --- LogicMods ---
+    - name: "logicmods: paks under LogicMods/ folder"
+      archive:
+        - Pack/LogicMods/BPFolder/X.pak
+      expect:
+        matched: logicmods
+        modType: outward2-logicmods
+        plan:
+          - ${paksPath}/LogicMods/BPFolder/X.pak
+
+    # --- Pak mods ---
+    - name: "pak: single pak file flattened to ~mods"
+      archive:
+        - SomeMod/Cool.pak
+      expect:
+        matched: pak
+        modType: outward2-pak
+        plan:
+          - ${pakModsPath}/Cool.pak
+
+    - name: "pak: pak+ucas+utoc triplet flattened"
+      archive:
+        - SomeMod/files/x_P.pak
+        - SomeMod/files/x_P.ucas
+        - SomeMod/files/x_P.utoc
+      expect:
+        matched: pak
+        modType: outward2-pak
+        plan:
+          - ${pakModsPath}/x_P.pak
+          - ${pakModsPath}/x_P.ucas
+          - ${pakModsPath}/x_P.utoc
+
+    # A .pak alongside .utoc/.ucas must route to `pak` (not `pak-iostore`, whose
+    # `unless: **/*.pak` excludes it) and flatten the wrapping folder into ~mods.
+    - name: "pak: pak wins over pak-iostore when both present"
+      archive:
+        - Better Stacks/0_BetterStacks_P.pak
+        - Better Stacks/0_BetterStacks_P.ucas
+        - Better Stacks/0_BetterStacks_P.utoc
+      expect:
+        matched: pak
+        modType: outward2-pak
+        plan:
+          - ${pakModsPath}/0_BetterStacks_P.pak
+          - ${pakModsPath}/0_BetterStacks_P.ucas
+          - ${pakModsPath}/0_BetterStacks_P.utoc
+
+    - name: "pak-iostore: utoc+ucas without a pak"
+      archive:
+        - SomeMod/x_P.utoc
+        - SomeMod/x_P.ucas
+      expect:
+        matched: pak-iostore
+        modType: outward2-pak
+        plan:
+          - ${pakModsPath}/x_P.utoc
+          - ${pakModsPath}/x_P.ucas
+
+    - name: "pak-alt: bundled Paks/ folder → Content/Paks"
+      archive:
+        - mod/Paks/sub/x.pak
+        - mod/Paks/sub/x.ucas
+        - mod/Paks/sub/x.utoc
+      expect:
+        matched: pak-alt
+        modType: outward2-pakalt
+        plan:
+          - ${contentPath}/Paks/sub/x.pak
+          - ${contentPath}/Paks/sub/x.ucas
+          - ${contentPath}/Paks/sub/x.utoc
+
+    - name: "content-folder: Content/ at archive root"
+      archive:
+        - Content/Foo.uasset
+        - Content/Bar.uexp
+      expect:
+        matched: content-folder
+        modType: outward2-contentfolder
+        plan:
+          - ${gamePath}/Content/Foo.uasset
+          - ${gamePath}/Content/Bar.uexp
+
+    - name: "root: otw2_ue + Engine segments"
+      archive:
+        - otw2_ue/Content/Paks/foo.pak
+        - Engine/Content/bar.uasset
+      expect:
+        matched: root
+        modType: outward2-root
+        plan:
+          - ${installPath}/otw2_ue/Content/Paks/foo.pak
+          - ${installPath}/Engine/Content/bar.uasset
+
+    # --- Real shape: two bare paks at the archive root (mod 3, Otw2_Ue Chinese font) ---
+    - name: "pak: bare paks at archive root flatten to ~mods (real mod 3)"
+      archive:
+        - otw2_ue-Windows_Chinese.pak
+        - otw2_ue-Windows_ZFont.pak
+      expect:
+        matched: pak
+        modType: outward2-pak
+        plan:
+          - ${pakModsPath}/otw2_ue-Windows_Chinese.pak
+          - ${pakModsPath}/otw2_ue-Windows_ZFont.pak
+
+    # --- Real shape: game-relative ReShade/ShaderToggler bundle (mod 2, No HUD No Effects) ---
+    # Laid out from the project folder (otw2_ue/Binaries/Win64) with a dxgi.dll proxy.
+    # The whole tree must deploy intact so dxgi.dll lands next to the shipping exe.
+    - name: "root: game-relative ReShade dxgi bundle deploys intact (real mod 2)"
+      archive:
+        - LICENSE
+        - README.md
+        - otw2_ue/Binaries/Win64/ShaderToggler.addon64
+        - otw2_ue/Binaries/Win64/ShaderToggler.ini
+        - otw2_ue/Binaries/Win64/dxgi.dll
+      expect:
+        matched: root
+        modType: outward2-root
+        plan:
+          - ${installPath}/LICENSE
+          - ${installPath}/README.md
+          - ${installPath}/otw2_ue/Binaries/Win64/ShaderToggler.addon64
+          - ${installPath}/otw2_ue/Binaries/Win64/ShaderToggler.ini
+          - ${installPath}/otw2_ue/Binaries/Win64/dxgi.dll
+
+    # --- Mixed game-relative mod (UE4SS lua + asset-replacement pak) ---
+    - name: "root: mixed lua+pak game-relative archive keeps paks"
+      archive:
+        - otw2_ue/Binaries/Win64/ue4ss/Mods/Foo/Scripts/main.lua
+        - otw2_ue/Binaries/Win64/ue4ss/Mods/Foo/enabled.txt
+        - otw2_ue/Content/Paks/~mods/Foo_P.pak
+      expect:
+        matched: root
+        modType: outward2-root
+        plan:
+          - ${installPath}/otw2_ue/Binaries/Win64/ue4ss/Mods/Foo/Scripts/main.lua
+          - ${installPath}/otw2_ue/Binaries/Win64/ue4ss/Mods/Foo/enabled.txt
+          - ${installPath}/otw2_ue/Content/Paks/~mods/Foo_P.pak
