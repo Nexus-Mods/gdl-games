@@ -29,10 +29,12 @@ exports.createNodesV2 = [
                   options: { command: 'node ../../gdl/dist/cli.js package', cwd: root },
                 },
                 // Tests run from the workspace root so vitest picks up the root
-                // vitest.config.ts (runtime aliases), filtered to this game's suite.
+                // vitest.config.ts (runtime aliases), filtered to this game's
+                // .gdl-out folder so ALL generated suites run (tests + templates
+                // + lifecycle), not just installer routing.
                 test: {
                   executor: 'nx:run-commands',
-                  options: { command: `vitest run ${root}/.gdl-out/tests.gen.ts` },
+                  options: { command: `vitest run ${root}/.gdl-out` },
                 },
                 'test-corpus': {
                   executor: 'nx:run-commands',
