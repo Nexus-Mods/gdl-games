@@ -23,9 +23,11 @@ function resolveUE4SSModsDir(api: types.IExtensionApi): string | undefined {
   if (!d?.path) return undefined;
   const isXbox = d.store === 'xbox';
   const arch = isXbox ? 'WinGDK' : 'Win64';
-  const gameDir = isXbox ? '' : 'Subnautica2';
-  const parts = [d.path, gameDir, 'Binaries', arch, 'ue4ss', 'Mods'].filter(s => s.length > 0);
-  return parts.join('/');
+  // The project nests under Subnautica2/ beneath the discovered install path on
+  // every store (on Xbox the discovered path is the ...\Content folder). Only the
+  // Binaries arch differs (WinGDK on Xbox, Win64 elsewhere).
+  const gameDir = 'Subnautica2';
+  return [d.path, gameDir, 'Binaries', arch, 'ue4ss', 'Mods'].join('/');
 }
 
 // Subnautica 2 ships a UTF-16LE version.json at the game root with build

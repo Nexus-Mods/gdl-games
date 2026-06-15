@@ -1,5 +1,5 @@
 gdl: 1
-version: 1.3.0
+version: 1.4.0
 
 game:
   id: subnautica2
@@ -20,6 +20,11 @@ game:
 stores:
   steam: "1962700"
   epic: "22bfc34d90b64054809542014fc9eb32"
+  # Xbox/Game Pass: value is the package Identity Name (Vortex matches the
+  # appsFolder key before '_'). Package family is
+  # UnknownWorldsEntertainmen.Subnautica2_bh1f6rvenfkm2; the Identity Name is the
+  # part before the '_'. Verified on a local Game Pass install (Get-AppxPackage).
+  xbox: "UnknownWorldsEntertainmen.Subnautica2"
 
 context:
   arch:
@@ -27,10 +32,12 @@ context:
       xbox: WinGDK
       default: Win64
 
-  gamePath:
-    storeBranch:
-      xbox: ${installPath}
-      default: ${installPath}/Subnautica2
+  # The UE project is nested under a Subnautica2/ folder beneath the discovered
+  # install path on EVERY store — including Xbox/Game Pass, where the discovered
+  # install path is the ...\Content folder (it holds Subnautica2.exe plus the
+  # Subnautica2/ project folder). Verified on a local Game Pass install. Only the
+  # Binaries arch differs by store (WinGDK on Xbox, Win64 elsewhere — see arch).
+  gamePath: ${installPath}/Subnautica2
 
   pakModsPath: ${gamePath}/Content/Paks/~mods
   logicModsPath: ${gamePath}/Content/Paks/LogicMods
@@ -131,9 +138,10 @@ installers:
 
   # --- Priority 11: Content folder (project-relative trees: Content/, Config/, Binaries/) ---
   # Sibling of `root` for archives laid out from the game PROJECT folder rather
-  # than the install root. Whole tree deploys to ${gamePath} (= installPath on
-  # Xbox, installPath/Subnautica2 elsewhere), so Binaries/ correctly lands under
-  # the project folder. Like `root`, it wins over the narrow installers below.
+  # than the install root. Whole tree deploys to ${gamePath} (= installPath/Subnautica2
+  # on every store — on Xbox the install path is the ...\Content folder), so
+  # Binaries/ correctly lands under the project folder. Like `root`, it wins over
+  # the narrow installers below.
   - id: content-folder
     priority: 11
     when:

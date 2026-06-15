@@ -1,5 +1,5 @@
 gdl: 1
-version: 0.1.0   # extension version — drives info.json, the release tag, and the zip name
+version: 0.2.0   # extension version — drives info.json, the release tag, and the zip name
 
 # Solarpunk (rokaplay / Cyberwave) — Unreal Engine 5 (5.7.x), IoStore paks.
 # Supports: pak mods (Content/Paks/~mods), LogicMods, UE4SS (loader + Lua mods),
@@ -31,16 +31,17 @@ stores:
   xbox: "rokapublish.Solarpunk"
 
 context:
-  # On Xbox/Game Pass the project files sit at the install root and ship as WinGDK;
-  # on Steam/Epic they live under the Solarpunk/ project folder, arch Win64.
+  # Binaries arch differs by store: WinGDK on Xbox/Game Pass, Win64 on Steam/Epic.
   arch:
     storeBranch:
       xbox: WinGDK
       default: Win64
-  gamePath:
-    storeBranch:
-      xbox: ${installPath}
-      default: ${installPath}/Solarpunk
+  # The UE project nests under a Solarpunk/ folder beneath the discovered install
+  # path on EVERY store — including Xbox/Game Pass, where the discovered path is the
+  # ...\Content folder (it holds Solarpunk.exe plus the Solarpunk/ project folder).
+  # Mirrors the layout verified on a real Subnautica 2 Game Pass install; confirm on
+  # a Solarpunk Game Pass install if one becomes available. Only `arch` differs (above).
+  gamePath: ${installPath}/Solarpunk
 
   pakModsPath:   ${gamePath}/Content/Paks/~mods
   logicModsPath: ${gamePath}/Content/Paks/LogicMods
