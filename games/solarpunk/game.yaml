@@ -15,8 +15,6 @@ game:
   author: Nexus Mods
   nexusDomain: solarpunk
   details:
-    steamAppId: 1805110
-    epicAppId: "408e96c974c54d478cb18296164dcbfe"   # Epic AppName/artifact (Windows)
     supportsSymlinks: true
     gameProjectFolder: Solarpunk
     ignoreConflicts: [UE4SS-settings.ini, enabled.txt]

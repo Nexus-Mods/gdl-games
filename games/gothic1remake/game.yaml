@@ -10,7 +10,6 @@ game:
   author: Nexus Mods
   nexusDomain: gothic1remake
   details:
-    steamAppId: 1297900
     supportsSymlinks: true
     gameProjectFolder: G1R
     ignoreConflicts: [enabled.txt, mods.txt, UE4SS-settings.ini]

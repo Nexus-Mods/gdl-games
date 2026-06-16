@@ -10,8 +10,6 @@ game:
   author: Nexus Mods
   nexusDomain: subnautica2
   details:
-    steamAppId: 1962700
-    epicAppId: "22bfc34d90b64054809542014fc9eb32"
     supportsSymlinks: true
     gameProjectFolder: Subnautica2
     ignoreConflicts: [enabled.txt, mods.txt, UE4SS-settings.ini]

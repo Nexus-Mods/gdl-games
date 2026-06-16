@@ -22,14 +22,13 @@ game:
   author: Nexus Mods
   nexusDomain: outward2
   details:
-    steamAppId: 2849490
-    # Epic ("Coming Soon", slug outward-2-fae51e) and GOG are announced but the Epic
-    # manifest AppName isn't published yet — omitted rather than guessed. Xbox/Game Pass
-    # is not an Early-Access platform. Add stores once their ids are confirmed.
     supportsSymlinks: true
     gameProjectFolder: otw2_ue         # CONFIRMED from real mod layout (otw2_ue/...)
     ignoreConflicts: [UE4SS-settings.ini, enabled.txt]
 
+# Epic ("Coming Soon", slug outward-2-fae51e) and GOG are announced but the Epic
+# manifest AppName isn't published yet — omitted rather than guessed. Xbox/Game Pass
+# is not an Early-Access platform. Add stores once their ids are confirmed.
 stores:
   steam: "2849490"
 

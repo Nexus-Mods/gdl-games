@@ -32,7 +32,6 @@ game:
   author: Nexus Mods
   nexusDomain: assassinscreedblackflagresynced
   details:
-    steamAppId: 3751950
     supportsSymlinks: true
 
 stores:
