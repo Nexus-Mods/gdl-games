@@ -6,7 +6,7 @@ name: CI
 # release:    runs only on push to main — ships every game whose version was bumped.
 #
 # Releases are gated on a VERSION BUMP, not on hand-typed tags. To ship a game,
-# bump `version` in games/<id>/package.json and merge to main. CI then releases
+# bump the top-level `version:` in games/<id>/game.yaml and merge to main. CI then releases
 # any game that has no matching `<id>-v<version>` git tag yet; that tag is created
 # as part of the release and acts as the "already-published" ledger so the game is
 # not released again on the next push. Games with an unchanged version are skipped.
