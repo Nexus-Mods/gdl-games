@@ -200,4 +200,4 @@ jobs:
           display_name: ${{ steps.meta.outputs.display_name }}
           filename: games/${{ matrix.id }}/out/${{ steps.meta.outputs.zip_name }}
           version: ${{ steps.meta.outputs.version }}
-          archive_existing_file: true
+          archive_existing_version: true
