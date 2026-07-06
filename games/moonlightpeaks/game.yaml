@@ -46,10 +46,10 @@ setup:
 toolbarActions:
   - { id: open-nexus-page, title: Open Nexus Page, priority: 200, target: { openUrl: "https://www.nexusmods.com/moonlightpeaks" } }
 
-#   nexus:
-#     modId: 2027
-#     fileGroupId: 
-#     displayName: Moonlight Peaks Support for Vortex
+nexus:
+  modId: 2027
+  fileGroupId: 7625237
+  displayName: Moonlight Peaks Support for Vortex
 
 validators:
   - id: bepinex-validator
