@@ -62,16 +62,25 @@ validators:
 tests:
   corpus: nexus
   cases:
-    - name: loose file overlay drops to install root
+    - name: "root: flat files deploy to game root"
       archive:
-        - foo.png
+        - mod.dll
         - readme.txt
       expect:
         matched: root
         modType: moonlightpeaks-root
         plan:
-          - ${installPath}/foo.png
+          - ${installPath}/mod.dll
           - ${installPath}/readme.txt
+
+    - name: "root: subfolder structure is preserved at game root"
+      archive:
+        - CustomLoader/plugin.dll
+      expect:
+        matched: root
+        modType: moonlightpeaks-root
+        plan:
+          - ${installPath}/CustomLoader/plugin.dll
 
     - name: "bepinex: BepInEx/plugins at archive root"
       archive:
