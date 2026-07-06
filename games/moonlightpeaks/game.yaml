@@ -1,0 +1,64 @@
+gdl: 1
+version: 0.0.1
+
+game:
+  id: moonlightpeaks
+  name: Moonlight Peaks
+  executable: Moonlight Peaks.exe
+  requiredFiles: ["Moonlight Peaks.exe"]
+  logo: gameart.webp
+  author: Nexus Mods
+  nexusDomain: moonlightpeaks
+  details:
+    supportsSymlinks: true
+
+stores:
+  steam: "2209900"
+
+context:
+  pluginsPath: "${installPath}/BepInEx/plugins"
+
+modTypes:
+  - { id: moonlightpeaks-root, name: "Root (game folder)", path: "${installPath}" }
+  - { id: moonlightpeaks-bepinex, name: "BepInEx (game folder)", path: "${installPath}" }
+
+installers:
+  - id: bepinex
+    priority: 10
+    when: { hasFile: "**/BepInEx/**" }
+    anchor: "**/BepInEx/"
+    take: self
+    placeAt: "${installPath}"
+    modType: moonlightpeaks-bepinex
+
+setup:
+  ensureDirs:
+    - ${pluginsPath}
+
+toolbarActions:
+  - { id: open-nexus-page, title: Open Nexus Page, priority: 200, target: { openUrl: "https://www.nexusmods.com/moonlightpeaks" } }
+
+#   nexus:
+#     modId: 2027
+#     fileGroupId: 
+#     displayName: Moonlight Peaks Support for Vortex
+
+validators:
+  - id: bepinex-validator
+    name: Archives containing a BepInEx/ folder deploy to the game install root
+    when: { hasFile: "**/BepInEx/**" }
+    assert:
+      matched: bepinex
+      modType: moonlightpeaks-bepinex
+
+tests:
+  corpus: nexus
+  cases:
+    - name: "bepinex: BepInEx/plugins at archive root"
+      archive:
+        - BepInEx/plugins/mod.dll
+      expect:
+        matched: bepinex
+        modType: moonlightpeaks-bepinex
+        plan:
+          - ${installPath}/BepInEx/plugins/mod.dll
