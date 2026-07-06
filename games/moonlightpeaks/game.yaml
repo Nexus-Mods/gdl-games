@@ -31,6 +31,14 @@ installers:
     placeAt: "${installPath}"
     modType: moonlightpeaks-bepinex
 
+  - id: root
+    priority: 20
+    when: { hasFile: "**/*" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}"
+    modType: moonlightpeaks-root
+
 setup:
   ensureDirs:
     - ${pluginsPath}
@@ -54,6 +62,17 @@ validators:
 tests:
   corpus: nexus
   cases:
+    - name: loose file overlay drops to install root
+      archive:
+        - foo.png
+        - readme.txt
+      expect:
+        matched: root
+        modType: moonlightpeaks-root
+        plan:
+          - ${installPath}/foo.png
+          - ${installPath}/readme.txt
+
     - name: "bepinex: BepInEx/plugins at archive root"
       archive:
         - BepInEx/plugins/mod.dll
