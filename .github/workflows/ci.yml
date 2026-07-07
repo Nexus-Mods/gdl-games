@@ -178,7 +178,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            echo "file_id=$(node ../../gdl/dist/cli.js publish-info file-id)"
+            echo "file_group_id=$(node ../../gdl/dist/cli.js publish-info file-group-id)"
             echo "display_name=$(node ../../gdl/dist/cli.js publish-info display-name)"
             echo "version=$(node ../../gdl/dist/cli.js publish-info version)"
             echo "zip_name=$(node ../../gdl/dist/cli.js publish-info zip-name)"
