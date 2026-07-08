@@ -8,7 +8,7 @@ version: 1.0.0 # extension version — drives info.json, the release tag, and th
 # this remake uses the modern Anvil .forge layout.
 #
 # Verified facts:
-#   - Executable / launch: ACBlackFlag.exe (Steam app 3751950.
+#   - Executable / launch: ACBlackFlag.exe (Steam app 3751950).
 #   - Steam installdir: "Assassin's Creed Black Flag Resynced".
 #   - Ubisoft Connect PC Client (app 1716750).
 #   - Nexus game is live: domain "assassinscreedblackflagresynced".
@@ -50,6 +50,11 @@ context:
 modTypes:
   - { id: acbfr-reshade, name: "ReShade (game root)", path: "${gameRootPath}" }
   - {
+      id: acbfr-asi,
+      name: "ASI / script loader (game root)",
+      path: "${gameRootPath}",
+    }
+  - {
       id: acbfr-reforger,
       name: "ReForger patch (.reforger/.forger2)",
       path: "${forgerPatchesPath}",
@@ -63,19 +68,38 @@ modTypes:
 
 installers:
   # --- Priority 15: ReShade injector + preset → game root ---
-  # The single biggest mod category for this game (e.g. AC4's "Caribbean 2021 Reshade").
-  # Shape: ReShade.ini + ReShadePreset.ini + a dxgi loader + a reshade-shaders/ tree,
-  # sometimes wrapped in a named folder. Anchor on ReShade.ini and strip the wrapper so
-  # the loader and shaders land directly beside the exe. Excludes .forge archives so an
-  # Anvil mod that happens to bundle a preset still routes as .forge.
+  # A big mod category for this game (e.g. Resynced's "Ultra Realistica ReShade", AC4's
+  # "Caribbean 2021 Reshade"). Full installs carry ReShade.ini + a dxgi loader + a
+  # reshade-shaders/ tree; preset-only uploads carry just ReShadePreset.ini. Anchor on
+  # either and strip the wrapper so the files land beside the exe. Excludes .forge/.asi so
+  # an Anvil or ASI mod that also bundles a preset routes as that instead.
   - id: reshade
     priority: 15
-    when: { hasFile: "**/ReShade.ini" }
-    unless: { hasFile: "**/*.forge" }
-    anchor: "**/ReShade.ini"
+    when: { hasFile: "**/{ReShade.ini,ReShadePreset.ini}" }
+    unless:
+      any:
+        - { hasFile: "**/*.forge" }
+        - { hasFile: "**/*.asi" }
+    anchor: "**/{ReShade.ini,ReShadePreset.ini}"
     take: parent
     placeAt: "${gameRootPath}"
     modType: acbfr-reshade
+
+  # --- Priority 18: ASI / script-extender loader → game root ---
+  # Ultimate-ASI-Loader-based fixes (e.g. Resynced's "ACBlackFlagFix", Mirage's
+  # "FSR2/Streamline"): a proxy DLL (dinput8/winmm/dsound/version.dll) + one or more *.asi
+  # plugins + an .ini, "dragged into the root folder next to ACBlackFlag.exe". Keyed on the
+  # unambiguous *.asi (proxy DLL names overlap ReShade's dxgi.dll, so we don't key on DLLs).
+  # Anchor on the .asi and take its parent so a folder-wrapped upload strips to the game
+  # root (the loader dll + .asi sit alongside the .asi, so they travel with it).
+  - id: asi
+    priority: 18
+    when: { hasFile: "**/*.asi" }
+    unless: { hasFile: "**/*.forge" }
+    anchor: "**/*.asi"
+    take: parent
+    placeAt: "${gameRootPath}"
+    modType: acbfr-asi
 
   # --- Priority 20: ReForger / Forger Patch Manager patch → ForgerPatches folder ---
   # Modern-Anvil mods (e.g. Mirage's "Basim Replacer") ship a single .reforger/.forger2
@@ -84,6 +108,7 @@ installers:
   - id: reforger
     priority: 20
     when: { hasFile: "**/*.{reforger,forger2}" }
+    unless: { hasFile: "**/*.forge" }
     anchor: "**/*.{reforger,forger2}"
     take: parent
     placeAt: "${forgerPatchesPath}"
@@ -104,10 +129,10 @@ installers:
     modType: acbfr-forge
 
   # --- Priority 90: catch-all overlay → install root (game-relative archives) ---
-  # The everyday loose-file mod: a re-encoded video pack (videos/*.webm), a DLL/ASI script
-  # loader (winmm.dll + *.asi + a plugin folder), a config tweak or a standalone tool —
-  # laid out relative to the game folder and deployed as-is from the install root. Lowest
-  # priority; only catches archives that aren't a ReShade preset, .reforger or .forge.
+  # The everyday loose-file mod: a re-encoded video pack (videos/*.webm), a config tweak
+  # or a standalone tool (e.g. "Save Resigner") — laid out relative to the game folder and
+  # deployed as-is from the install root. Lowest priority; only catches archives that
+  # aren't a ReShade preset, an ASI loader, a .reforger patch or a .forge archive.
   - id: root
     priority: 90
     when: { hasFile: "**/*" }
@@ -115,7 +140,8 @@ installers:
       any:
         - { hasFile: "**/*.forge" }
         - { hasFile: "**/*.{reforger,forger2}" }
-        - { hasFile: "**/ReShade.ini" }
+        - { hasFile: "**/*.asi" }
+        - { hasFile: "**/{ReShade.ini,ReShadePreset.ini}" }
     anchor: "**/*"
     take: archive-root
     placeAt: "${installPath}"
@@ -139,21 +165,36 @@ nexus:
 # modelled on the modern-Anvil AC Mirage catalogue — are the real regression guard.
 validators:
   - id: reshade-to-root
-    name: "ReShade presets (ReShade.ini, no .forge) install to the game root"
+    name: "ReShade presets (ReShade.ini/ReShadePreset.ini, no .forge/.asi) install to the game root"
     when:
       all:
-        - { hasFile: "**/ReShade.ini" }
+        - { hasFile: "**/{ReShade.ini,ReShadePreset.ini}" }
         - not: { hasFile: "**/*.forge" }
+        - not: { hasFile: "**/*.asi" }
     assert:
       matched: reshade
       modType: acbfr-reshade
 
+  - id: asi-to-root
+    name: "ASI script loaders (*.asi, no .forge) install to the game root"
+    when:
+      all:
+        - { hasFile: "**/*.asi" }
+        - not: { hasFile: "**/*.forge" }
+    assert:
+      matched: asi
+      modType: acbfr-asi
+
   - id: reforger-to-forgerpatches
-    name: ".reforger/.forger2 patches install to the ForgerPatches folder"
+    name: ".reforger/.forger2 patches (no higher-priority loader present) go to ForgerPatches"
+    # reforger is priority 20 — reshade (15) and asi (18) win if their markers are present,
+    # so exclude those from the assertion as well as .forge (which reforger now yields to).
     when:
       all:
         - { hasFile: "**/*.{reforger,forger2}" }
         - not: { hasFile: "**/*.forge" }
+        - not: { hasFile: "**/*.asi" }
+        - not: { hasFile: "**/{ReShade.ini,ReShadePreset.ini}" }
     assert:
       matched: reforger
       modType: acbfr-reforger
@@ -167,11 +208,14 @@ validators:
 
 tests:
   corpus: nexus
-  # Shapes mirror real modern-Anvil AC Mirage mods (same engine generation as this remake)
-  # cross-checked against the live Resynced uploads: a ReShade preset, a video-skip pack
-  # (Mirage "Fast Launch" / Resynced "Fast Launch", videos/*.webm), a DLL/ASI script loader
-  # (Mirage "FSR2/Streamline"), a ReForger patch (Mirage "Basim Replacer", .reforger), and
-  # Anvil .forge archives (Mirage "Combat Assassin Focus", DataPC_patch_NN.forge).
+  # Shapes mirror the live Resynced uploads plus the modern-Anvil AC Mirage catalogue
+  # (same engine generation as this remake):
+  #   - ReShade full install + preset-only  (Resynced "Ultra Realistica ReShade")
+  #   - ASI loader fix                       (Resynced "ACBlackFlagFix", Mirage "FSR2/Streamline")
+  #   - video-skip pack, videos/*.webm       (Resynced "Fast Launch"/"Recoded Videos")
+  #   - standalone tool                      (Resynced "Save Resigner")
+  #   - ReForger patch, .reforger            (Mirage "Basim Replacer")
+  #   - Anvil .forge archives                (Mirage "Combat Assassin Focus")
   cases:
     # --- ReShade preset at archive root: loader + shaders → game root ---
     - name: "reshade: ReShade.ini + dxgi loader + shaders at root → game root"
@@ -201,6 +245,44 @@ tests:
           - ${gameRootPath}/ReShade.ini
           - ${gameRootPath}/reshade-shaders/Shaders/Clarity.fx
 
+    # --- Preset-only ReShade: a bare ReShadePreset.ini → game root (Ultra Realistica) ---
+    - name: "reshade: preset-only ReShadePreset.ini → game root"
+      archive:
+        - ReShadePreset.ini
+      expect:
+        matched: reshade
+        modType: acbfr-reshade
+        plan:
+          - ${gameRootPath}/ReShadePreset.ini
+
+    # --- ASI loader fix: proxy DLL + .asi plugin + ini → game root (ACBlackFlagFix) ---
+    - name: "asi: Ultimate ASI Loader fix (dinput8 + .asi + ini) → game root"
+      archive:
+        - dinput8.dll
+        - ACBlackFlagFix.asi
+        - ACBlackFlagFix.ini
+      expect:
+        matched: asi
+        modType: acbfr-asi
+        plan:
+          - ${gameRootPath}/dinput8.dll
+          - ${gameRootPath}/ACBlackFlagFix.asi
+          - ${gameRootPath}/ACBlackFlagFix.ini
+
+    # --- ASI loader wrapped in a named folder → strip wrapper, place at game root ---
+    - name: "asi: folder-wrapped ASI loader stripped to game root"
+      archive:
+        - ACBlackFlagFix/dinput8.dll
+        - ACBlackFlagFix/ACBlackFlagFix.asi
+        - ACBlackFlagFix/ACBlackFlagFix.ini
+      expect:
+        matched: asi
+        modType: acbfr-asi
+        plan:
+          - ${gameRootPath}/dinput8.dll
+          - ${gameRootPath}/ACBlackFlagFix.asi
+          - ${gameRootPath}/ACBlackFlagFix.ini
+
     # --- Video pack overlay: videos/*.webm (+ readme) → game root (Fast Launch) ---
     - name: "root: video pack overlays videos/ at the install root"
       archive:
@@ -215,21 +297,33 @@ tests:
           - ${installPath}/videos/en/Epilepsy.webm
           - ${installPath}/README.txt
 
-    # --- DLL/ASI script loader (winmm proxy + .asi + plugin folder) → game root ---
-    - name: "root: dll/asi loader overlays the install root"
+    # --- ASI loader with a plugin folder (winmm proxy + .asi + streamline/) → game root ---
+    - name: "asi: winmm proxy + .asi + plugin folder → game root (FSR2/Streamline)"
       archive:
         - winmm.dll
         - winmm.ini
         - FSR2Streamline.asi
         - streamline/sl.dlss.dll
       expect:
+        matched: asi
+        modType: acbfr-asi
+        plan:
+          - ${gameRootPath}/winmm.dll
+          - ${gameRootPath}/winmm.ini
+          - ${gameRootPath}/FSR2Streamline.asi
+          - ${gameRootPath}/streamline/sl.dlss.dll
+
+    # --- Standalone tool: a game-relative utility (+ readme) → install root (Save Resigner) ---
+    - name: "root: standalone tool overlays the install root"
+      archive:
+        - ACBFR-Save-Resigner/SaveResigner.exe
+        - ACBFR-Save-Resigner/README.txt
+      expect:
         matched: root
         modType: acbfr-root
         plan:
-          - ${installPath}/winmm.dll
-          - ${installPath}/winmm.ini
-          - ${installPath}/FSR2Streamline.asi
-          - ${installPath}/streamline/sl.dlss.dll
+          - ${installPath}/ACBFR-Save-Resigner/SaveResigner.exe
+          - ${installPath}/ACBFR-Save-Resigner/README.txt
 
     # --- ReForger patch: bare .reforger → ForgerPatches folder (Basim Replacer) ---
     - name: "reforger: bare .reforger patch → ForgerPatches folder"
