@@ -1,5 +1,5 @@
 gdl: 1
-version: 0.0.1 # extension version — drives info.json, the release tag, and the zip name
+version: 1.0.0 # extension version — drives info.json, the release tag, and the zip name
 
 # Assassin's Creed Black Flag Resynced (Ubisoft Singapore / Ubisoft) — a full remake
 # of AC IV: Black Flag built on the latest Ubisoft Anvil engine (same modding
