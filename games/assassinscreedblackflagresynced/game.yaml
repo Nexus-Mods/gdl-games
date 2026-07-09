@@ -157,7 +157,7 @@ toolbarActions:
 nexus:
   modId: 1977
   fileGroupId: 7633031
-  displayName: Assassin's Creed Black Flag Resynced Support for Vortex
+  displayName: AC Black Flag Resynced Support for Vortex
 
 # Corpus validators: assertions checked against real Nexus archives via
 # `gdl test:corpus --fetch`. The Resynced page is new (its handful of uploads have no
