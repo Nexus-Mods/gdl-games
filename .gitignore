@@ -8,3 +8,5 @@ out/
 
 # Nx cache + workspace data
 .nx/
+
+.env
