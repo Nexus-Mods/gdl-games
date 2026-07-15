@@ -51,12 +51,28 @@ modTypes:
   # GDL114). Asset paks and blueprint (LogicMods) paks both deploy under
   # Content/Paks — blueprint mods just carry their LogicMods/ subfolder in the
   # stripped relative path, so both modTypes share the ${paksPath} root.
-  - { id: subnautica2-pak,            name: "Paks (Content/Paks)",        path: "${paksPath}" }
-  - { id: subnautica2-logicmods,      name: "LogicMods (Blueprint paks)", path: "${paksPath}" }
-  - { id: subnautica2-ue4ss,          name: "UE4SS (Lua scripts)",      path: "${ue4ssModsPath}" }
-  - { id: subnautica2-ue4ss-injector, name: "UE4SS Injector",           path: "${ue4ssInjectorPath}" }
-  - { id: subnautica2-root,           name: "Root (game folder)",       path: "${installPath}" }
-  - { id: subnautica2-contentfolder,  name: "Content folder",           path: "${gamePath}" }
+  - { id: subnautica2-pak, name: "Paks (Content/Paks)", path: "${paksPath}" }
+  - {
+      id: subnautica2-logicmods,
+      name: "LogicMods (Blueprint paks)",
+      path: "${paksPath}",
+    }
+  - {
+      id: subnautica2-ue4ss,
+      name: "UE4SS (Lua scripts)",
+      path: "${ue4ssModsPath}",
+    }
+  - {
+      id: subnautica2-ue4ss-injector,
+      name: "UE4SS Injector",
+      path: "${ue4ssInjectorPath}",
+    }
+  - { id: subnautica2-root, name: "Root (game folder)", path: "${installPath}" }
+  - {
+      id: subnautica2-contentfolder,
+      name: "Content folder",
+      path: "${gamePath}",
+    }
 
 installers:
   # --- Priority 15: UE4SS Injector (dwmapi.dll, xinput1_4.dll, UE4SS-settings.ini) ---
@@ -195,7 +211,7 @@ toolbarActions:
     target: { openUrl: "https://www.nexusmods.com/subnautica2" }
 
 nexus:
-  modId: 1091
+  modId: 1891
   fileGroupId: 7418978
   displayName: Subnautica 2 Support for Vortex
 
