@@ -1,5 +1,5 @@
 gdl: 1
-version: 1.3.0
+version: 1.3.1
 
 game:
   id: paralives
@@ -22,6 +22,15 @@ stores:
 context:
   localModsPath: "${appDataLocalLow}/Paralives/Paralives"
   settingsPath: "${installPath}/Main.mod/Settings"
+
+# The paralives-mod modType deploys into LocalLow, outside the game install
+# dir. That folder does not exist until created, so without pre-creating it
+# Vortex reports "Deployment target unknown" and refuses to deploy. settingsPath
+# lives under installPath and already exists with the game, so only the LocalLow
+# mods dir needs ensuring here.
+setup:
+  ensureDirs:
+    - ${localModsPath}
 
 modTypes:
   - id: paralives-mod
