@@ -137,6 +137,11 @@ installers:
     placeAt: "${configPath}"
     modType: hce-config
 
+  # NOTE: an archive shaped `Config/Engine.ini` routes to content-folder (17, lower number
+  # wins) and lands in Meteorite/Config/, NOT the user config dir. That's correct for a
+  # project-relative archive, and no real mod ships that shape — all five ship a bare
+  # Engine.ini. Only revisit if one appears.
+
   # --- Priority 21: Main-menu background video → Content/Movies/MainMenu_Background ---
   # Mods 15-18, 20, 21 ship a single FMS_MainMenuBackground.mp4 (sometimes wrapped in a
   # named folder with install instructions) that replaces the shipped menu video.
