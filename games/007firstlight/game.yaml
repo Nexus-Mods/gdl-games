@@ -1,22 +1,5 @@
 gdl: 1
-version: 1.1.1   # extension version — drives info.json, the release tag, and the zip name
-
-# 007: First Light (IO Interactive) — Glacier engine, modded via RPKG patch archives.
-# Supports: .rpkg patches (→ Runtime/), loose DLL/INI/CFG overlays (→ Retail/), and
-# whole-folder "root" mods.
-#
-# Note the shipping exe is NOT at the install root: executable/requiredFiles are
-# Retail/007FirstLight.exe (these are literal relative paths — no glob expansion).
-#
-# Installer priorities run highest-first, and the three rules are mutually exclusive by
-# construction: rpkg-patch (50) claims anything with a .rpkg; retail-overlay (30) takes
-# loose dll/ini/cfg but `unless` a .rpkg is present; root (10) is the fallback for
-# archives with none of those extensions.
-#
-# Corpus state: uploads on this game may postdate the June 2026 Nexus manifest outage, in
-# which case `test:corpus --fetch` returns 404 and routes nothing while still exiting 0.
-# Reconcile the summary's total against the real mod count before trusting a green run —
-# see docs/corpus-manifests.md.
+version: 1.1.1
 
 game:
   id: 007firstlight

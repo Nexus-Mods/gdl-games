@@ -8,15 +8,19 @@
  *
  *   1. every games/<id>/ appears in the skill's template map (and the map names no game
  *      that doesn't exist)
- *   2. every games/<id>/game.yaml opens with a `#` header comment block
- *   3. no doc hardcodes an absolute path (e.g. C:\... ) — they break on other checkouts
- *   4. relative links in the docs we own actually resolve
+ *   2. no doc hardcodes an absolute path (e.g. C:\... ) — they break on other checkouts
+ *   3. relative links in the docs we own actually resolve
+ *
+ * Deliberately NOT checked: whether each game.yaml carries a header comment block. New games
+ * get one (the skill's Step 3b covers it), but mechanically enforcing it across every existing
+ * game turns a documentation habit into a compliance chore — and a guard that fires on
+ * something nobody intends to fix is a guard people learn to ignore.
  *
  * Usage: node tools/audit-docs.mjs
  * Exits non-zero with a list of problems.
  */
 
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -51,22 +55,7 @@ for (const m of mapText.matchAll(/games\/([a-z0-9]+)`/g)) {
   }
 }
 
-// --- 2. every game.yaml has a header comment block -------------------------
-
-for (const g of games) {
-  const rel = `games/${g}/game.yaml`;
-  // Look past `gdl:` / `version:` for a run of comment lines before the first section.
-  const lines = read(rel).split(/\r?\n/).slice(0, 40);
-  const firstSection = lines.findIndex(l => /^[a-z]+:/.test(l) && !/^(gdl|version):/.test(l));
-  const head = lines.slice(0, firstSection === -1 ? lines.length : firstSection);
-  const commentLines = head.filter(l => l.trim().startsWith('#')).length;
-  if (commentLines < 2) {
-    problems.push(`${rel}: missing a header comment block (what the game is, engine, `
-      + `supported mod types). See games/solarpunk/game.yaml.`);
-  }
-}
-
-// --- 3. no absolute paths in docs -----------------------------------------
+// --- 2. no absolute paths in docs -----------------------------------------
 
 for (const rel of DOCS) {
   const text = read(rel);
@@ -76,7 +65,7 @@ for (const rel of DOCS) {
   }
 }
 
-// --- 4. relative links resolve --------------------------------------------
+// --- 3. relative links resolve --------------------------------------------
 
 for (const rel of DOCS) {
   const text = read(rel);

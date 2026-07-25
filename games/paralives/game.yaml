@@ -1,17 +1,5 @@
 gdl: 1
-version: 1.3.1   # extension version — drives info.json, the release tag, and the zip name
-
-# Paralives (Paralives Studio) — custom engine (Unity-based), .mod folder format.
-# Supports: mod folders (→ %LOCALAPPDATA%Low/Paralives/Paralives), settings overrides
-# (→ Main.mod/Settings), and loose-file overlays.
-#
-# The reference example of a game whose mods deploy OUTSIDE the install dir:
-# localModsPath is ${appDataLocalLow}/Paralives/Paralives — the same folder the base game
-# reads. `setup.ensureDirs` creates it, because Vortex can't deploy into a missing target.
-# discovery.version reads Main.mod/Settings/GameVersion.setting (no hook needed).
-#
-# Note the sibling variables: ${appDataLocalLow} here vs ${appDataLocal} for Unreal user
-# config (see games/halocampaignevolved). They are different directories — don't swap them.
+version: 1.3.1
 
 game:
   id: paralives

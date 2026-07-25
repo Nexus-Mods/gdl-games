@@ -41,6 +41,10 @@ Don't duplicate a fact across these — add a one-line link instead.
 
 ## Keeping docs honest
 
-`node tools/audit-docs.mjs` checks that every game appears in the template map, that every
-`game.yaml` has a header comment block, and that no doc hardcodes an absolute path. Run it after
-adding a game or editing these docs.
+`node tools/audit-docs.mjs` checks that every game appears in the template map, that no doc
+hardcodes an absolute path, and that relative links resolve. Run it after adding a game or editing
+these docs.
+
+It deliberately does **not** check that each `game.yaml` has a header comment block. New games get
+one (rule 6 above), but enforcing it across every existing game would turn a documentation habit
+into a compliance chore.
