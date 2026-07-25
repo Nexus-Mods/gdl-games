@@ -1,5 +1,17 @@
 gdl: 1
-version: 2.1.0
+version: 2.1.0   # extension version — drives info.json, the release tag, and the zip name
+
+# Gothic 1 Remake (Alkimia Interactive) — Unreal Engine 5. Project folder: G1R.
+# Supports: pak mods (Content/Paks/~mods), UE4SS (loader + Lua mods), native Gothic mods,
+# UE4SS injector repacks, and whole-folder "root" / project-relative "content-folder" mods.
+#
+# Two things to know before copying this as a template:
+#   - discovery.version reads a plain-text file, no hook needed:
+#     ${installPath}/G1R/Version/version.txt matched by /Build(\d+_CL\d+)/
+#   - events.did-deploy DOES use src/hooks.ts (regenerateModsTxt) to rebuild the UE4SS
+#     mods.txt load order after each deploy
+# So this game has hooks AND file-based version discovery. Compare games/subnautica2,
+# which needs a *hook* for version detection because its version file isn't plain UTF-8.
 
 game:
   id: gothic1remake

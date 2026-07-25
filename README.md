@@ -17,13 +17,17 @@ project (via an inference plugin — no per-game config), giving cached, paralle
 ```
 gdl-games/
 ├── gdl/                       # shared GDL toolchain (git submodule, built once)
-├── games/                     # one folder per game (007firstlight, gothic1remake,
-│   ├── solarpunk/             #   paralives, solarpunk, subnautica2)
-│   │   ├── game.yaml          #   the game definition (incl. top-level `version:`)
-│   │   └── gameart.webp       #   the logo
+├── games/                     # one folder per game — currently 007firstlight,
+│   ├── solarpunk/             #   assassinscreedblackflagresynced, gothic1remake,
+│   │   ├── game.yaml          #   halocampaignevolved, moonlightpeaks, outward2,
+│   │   └── gameart.webp       #   paralives, solarpunk, subnautica2
 │   └── subnautica2/           # games needing custom logic also have:
 │       └── src/hooks.ts       #   version detection / deploy hooks
+├── docs/corpus-manifests.md   # corpus verification: how it works, fails, and the workaround
+├── tools/corpus/              # build corpus listings when Nexus manifests are unavailable
 ├── tools/nx/gdl-plugin.js     # Nx inference plugin: game.yaml → project + targets
+├── tools/audit-docs.mjs       # guards these docs against drifting out of date
+├── CLAUDE.md                  # cross-cutting rules + where each fact is documented
 ├── nx.json                    # Nx caching inputs/outputs + targetDefaults
 ├── vitest.config.ts           # one config that tests every game
 ├── tsconfig.base.json         # minimal stub — required for Nx local-plugin resolution
@@ -94,6 +98,17 @@ pnpm test:corpus                               # all games: check against cached
 
 Or run it raw from inside the game folder: `node ../../gdl/dist/cli.js test:corpus --fetch`.
 
+`--limit N` and `--mods 1,2,3` bound the fetch on a large catalogue.
+
+> **A green corpus run can be vacuous.** A wholly failed fetch prints `✖` lines and an empty cache
+> prints `no archives in tests/cache/ — nothing to do`, and **both exit 0**. Always reconcile the
+> `T total` in the summary line against the game's real `mods` count from
+> `https://api.nexusmods.com/v1/games/<domain>.json`.
+>
+> Nexus currently has **no manifests for uploads after ~11 June 2026**, so `--fetch` returns 404 for
+> recent mods on any game. Use `tools/corpus/list-archive.mjs` to build listings from the archives
+> instead. Full detail: [`docs/corpus-manifests.md`](docs/corpus-manifests.md).
+
 ## Releasing
 
 Releases are **gated on a version bump** — there are no hand-typed tags. To ship a game:
@@ -118,6 +133,11 @@ To do it by hand: create `games/<id>/game.yaml` and drop in a `games/<id>/gamear
 — no `package.json`, no `vitest.config`, no workflow (add a `src/hooks.ts` only if the game needs
 version-detection or deploy hooks). The root scripts and CI pick up any `games/*/game.yaml`
 automatically.
+
+Document your research in **`#` comment blocks inside `game.yaml`** — engine and layout, provenance
+for each store id, and `# unverified` on anything you inferred rather than observed. Exemplars:
+`games/solarpunk/game.yaml`, `games/halocampaignevolved/game.yaml`. Please don't add a per-game
+README; comments next to the thing they explain don't drift.
 
 A minimal `game.yaml`:
 
