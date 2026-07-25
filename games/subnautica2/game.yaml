@@ -1,5 +1,14 @@
 gdl: 1
-version: 1.4.1
+version: 1.4.1   # extension version — drives info.json, the release tag, and the zip name
+
+# Subnautica 2 (Unknown Worlds) — Unreal Engine 5, IoStore paks. Project folder: Subnautica2.
+# Supports: pak mods (Content/Paks/~mods), LogicMods (blueprint paks), UE4SS (loader + Lua
+# mods), and whole-folder "root" / project-relative "content-folder" archives.
+#
+# Uses src/hooks.ts for two things a declarative rule can't express:
+#   - discovery.version: { hook } — the version file isn't plain UTF-8
+#   - events.did-deploy         — regenerates the UE4SS mods.txt load order after deploy
+# This is the reference template for a UE5 game that needs hooks.
 
 game:
   id: subnautica2
