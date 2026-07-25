@@ -257,6 +257,8 @@ Tool: Agent
        paths. A wrong path can build and test green.
     7. game.yaml carries the comment blocks from Step 3b (header, provenance, omission rationale).
        There must be no games/<id>/README.md.
+       For an ALREADY-PUBLISHED game, also flag any renamed/removed modType id — it orphans users'
+       installed mods and nothing in the build catches it (docs/published-extension-stability.md).
     8. gameart.webp exists and is a valid WebP of the game's tile.jpg, saved uncropped (tiles are
        portrait, e.g. 400x600). Minor art issues are low severity — it's a fallback Vortex only uses
        when it can't load tile art from the site.

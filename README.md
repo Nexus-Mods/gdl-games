@@ -123,6 +123,11 @@ tag yet, it packages the extension, creates a GitHub release (the tag doubles as
 "already-published" ledger), and uploads to Nexus Mods. Games with an unchanged version are
 skipped. A placeholder guard refuses to publish any game whose `game.yaml` still contains stub ids.
 
+> **Once a game has shipped, some `game.yaml` edits break existing users' installed mods** —
+> renaming or removing a `modType` id orphans them, and changing an installer means a mod must be
+> reinstalled to pick up the new routing. Nothing in the build, tests or corpus catches this. See
+> [`docs/published-extension-stability.md`](docs/published-extension-stability.md).
+
 ## Adding a new game
 
 The guided path is the **`/implement-game-extension`** skill: give it the Nexus site/extension id

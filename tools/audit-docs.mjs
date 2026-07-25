@@ -29,6 +29,7 @@ const DOCS = [
   'README.md',
   'CLAUDE.md',
   'docs/corpus-manifests.md',
+  'docs/published-extension-stability.md',
   'tools/corpus/README.md',
   '.claude/skills/implement-game-extension/SKILL.md',
   MAP,

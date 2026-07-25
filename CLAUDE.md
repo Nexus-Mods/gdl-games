@@ -15,6 +15,7 @@ to every session.
 | `game.yaml` DSL: keys, predicates, `take`/`anchor`/`placeAt`, built-in facts, CLI flags | [`gdl/README.md`](gdl/README.md) |
 | Setup, Nx targets, releasing | [`README.md`](README.md) |
 | Corpus verification: how it works, how it fails silently, the manifest outage, the workaround | [`docs/corpus-manifests.md`](docs/corpus-manifests.md) |
+| What breaks for existing users when you edit a **published** game.yaml | [`docs/published-extension-stability.md`](docs/published-extension-stability.md) |
 | Authoring a **new** game end-to-end | the `implement-game-extension` skill |
 | Research recipes (store ids, artwork URLs) + which game to copy | `.claude/skills/implement-game-extension/references/research-recipes.md` |
 | Why a specific game does what it does | that game's `game.yaml` comments |
@@ -34,9 +35,14 @@ Don't duplicate a fact across these — add a one-line link instead.
    claiming coverage — see [`docs/corpus-manifests.md`](docs/corpus-manifests.md).
 5. **Don't invent ids or paths.** Omit a store, mark the line `# unverified`, or ask. A wrong path
    usually still builds and tests green, so guesses are expensive to find later.
-6. **Document per-game research as `#` comments in `game.yaml`** (exemplars:
+6. **Never rename or remove a `modType` id on a published game.** Vortex stores the id against every
+   installed mod, so renaming it orphans them — and the build, tests and corpus all still pass.
+   Changing an installer is milder but means users must reinstall a mod to get the new routing. See
+   [`docs/published-extension-stability.md`](docs/published-extension-stability.md) before editing a
+   `game.yaml` that has already shipped.
+7. **Document per-game research as `#` comments in `game.yaml`** (exemplars:
    `games/solarpunk/game.yaml`, `games/halocampaignevolved/game.yaml`). No per-game README files.
-7. Run Nx via **`pnpm nx …`** — it's a local dependency. The Nx target is `test-corpus` (hyphen);
+8. Run Nx via **`pnpm nx …`** — it's a local dependency. The Nx target is `test-corpus` (hyphen);
    the underlying gdl CLI subcommand is `test:corpus` (colon).
 
 ## Keeping docs honest
