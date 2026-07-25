@@ -1,0 +1,583 @@
+gdl: 1
+version: 1.0.0   # extension version — drives info.json, the release tag, and the zip name
+
+# Halo: Campaign Evolved (Halo Studios / Xbox Game Studios) — Unreal Engine 5.
+# The studio's first UE5 title (replacing Slipspace); UE project folder is `Meteorite`,
+# so paks live in Meteorite/Content/Paks and UE4SS in Meteorite/Binaries/Win64.
+# Supports: pak mods (Content/Paks/~mods), LogicMods, UE4SS (loader + Lua mods),
+# ReShade presets, loose native DLL plugins, and whole-folder "root" mods.
+
+game:
+  id: halocampaignevolved
+  name: "Halo: Campaign Evolved"
+  # No bootstrap launcher at the install root — the shipping exe lives under the
+  # project's Binaries dir, verified against the Steam depot manifest for app 2806050
+  # (manifest 8153709523381701809, 2026-06-26).
+  # requiredFiles are literal relative paths (no glob expansion), so this pins the
+  # Steam/Win64 layout. The Xbox/Game Pass build uses Binaries/WinGDK and would need a
+  # separate entry — that store is not declared below, so this is consistent.
+  executable: Meteorite/Binaries/Win64/HaloCampaignEvolved.exe
+  requiredFiles: [Meteorite/Binaries/Win64/HaloCampaignEvolved.exe]
+  logo: gameart.webp
+  author: Nexus Mods
+  nexusDomain: halocampaignevolved
+  details:
+    steamAppId: 2806050
+    supportsSymlinks: true
+    gameProjectFolder: Meteorite
+    ignoreConflicts: [UE4SS-settings.ini, enabled.txt]
+
+stores:
+  steam: "2806050"
+  # Epic: the game is not sold on the Epic Games Store (Steam + Microsoft Store only) — omitted.
+  # Xbox: the package Identity Name is unconfirmed for the Game Pass build — omitted rather
+  # than guessed (a wrong value silently breaks Xbox auto-detection only).
+
+context:
+  # Binaries arch differs by store: WinGDK on Xbox/Game Pass, Win64 on Steam.
+  arch:
+    storeBranch:
+      xbox: WinGDK
+      default: Win64
+  # The UE project nests under a Meteorite/ folder beneath the discovered install path.
+  gamePath: ${installPath}/Meteorite
+
+  pakModsPath:   ${gamePath}/Content/Paks/~mods
+  logicModsPath: ${gamePath}/Content/Paks/LogicMods
+  paksPath:      ${gamePath}/Content/Paks
+  contentPath:   ${gamePath}/Content
+
+  # UE4SS / ReShade / loose DLL plugins all live next to the shipping exe.
+  binariesPath:  ${gamePath}/Binaries/${arch}
+  ue4ssRootPath: ${gamePath}/Binaries/${arch}/ue4ss
+  ue4ssModsPath: ${gamePath}/Binaries/${arch}/ue4ss/Mods
+
+  # Engine.ini tweaks are the single most common mod category on this game (mods 3,
+  # 5, 8, 29, 31). UE reads user config from %LOCALAPPDATA%, NOT the install dir.
+  # The leaf folder is the UE *target platform* name and varies per game/build
+  # (Windows / WindowsClient / WindowsNoEditor) — do not assume it. `Windows` is
+  # verified on a real install: %LOCALAPPDATA%\Meteorite\Saved\Config\Windows
+  # exists and holds GameUserSettings.ini (checked 2026-07-25).
+  configPath: ${appDataLocal}/Meteorite/Saved/Config/Windows
+
+  # Main-menu background replacements (mods 15-18, 20, 21) drop a single
+  # FMS_MainMenuBackground.mp4 over the shipped one.
+  menuMoviePath: ${gamePath}/Content/Movies/MainMenu_Background
+
+modTypes:
+  - { id: hce-pak,            name: "Paks (~mods)",               path: "${pakModsPath}" }
+  # Deploys under Content/Paks; the LogicMods/ subfolder rides along in each
+  # file's stripped relative path (so placeAt == this path; see GDL114).
+  - { id: hce-logicmods,      name: "LogicMods (Blueprint paks)", path: "${paksPath}" }
+  - { id: hce-ue4ss,          name: "UE4SS (Lua mods)",           path: "${ue4ssModsPath}" }
+  - { id: hce-ue4ss-injector, name: "UE4SS (loader)",             path: "${binariesPath}" }
+  - { id: hce-binaries,       name: "Binaries (ReShade / DLL plugins)", path: "${binariesPath}" }
+  - { id: hce-root,           name: "Root (game folder)",         path: "${installPath}" }
+  - { id: hce-contentfolder,  name: "Content folder",             path: "${gamePath}" }
+  # Deploys under Content/; the Paks/ subfolder rides along in each file's
+  # stripped relative path (so placeAt == this path; see GDL114).
+  - { id: hce-pakalt,         name: "Paks (no ~mods)",            path: "${contentPath}" }
+  - { id: hce-config,         name: "Config (Engine.ini tweaks)", path: "${configPath}" }
+  - { id: hce-menumovie,      name: "Main menu background",       path: "${menuMoviePath}" }
+
+installers:
+  # --- Priority 15: UE4SS loader (dwmapi/xinput proxy or UE4SS-settings.ini) → Binaries ---
+  - id: ue4ss-injector
+    priority: 15
+    when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: hce-ue4ss-injector
+
+  # --- Priority 18: ReShade preset (ReShade.ini, strip wrapper) → Binaries ---
+  - id: reshade
+    priority: 18
+    when: { hasFile: "**/ReShade.ini" }
+    unless: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/ReShade.ini"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: hce-binaries
+
+  # --- Priority 19: Engine.ini config tweak → %LOCALAPPDATA% Saved/Config ---
+  # The most common mod category here (mods 3, 5, 8, 29, 31): a bare Engine.ini (mod 29
+  # ships it lowercase, hence the case-insensitive brace) that UE reads from the user
+  # config dir, not the install dir. Excluded when the archive also carries real payload
+  # (paks / dlls / game-relative trees), so a mod bundling a config alongside a pak keeps
+  # its own routing instead of being reduced to a config drop.
+  - id: config-ini
+    priority: 19
+    when: { hasFile: "**/{Engine.ini,engine.ini,EngineNoStutter.ini}" }
+    unless:
+      any:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/*.utoc" }
+        - { hasFile: "**/*.dll" }
+        - { hasFile: "**/*.lua" }
+        - { hasFile: "Meteorite/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/{Engine.ini,engine.ini,EngineNoStutter.ini}"
+    take: parent
+    placeAt: "${configPath}"
+    modType: hce-config
+
+  # --- Priority 21: Main-menu background video → Content/Movies/MainMenu_Background ---
+  # Mods 15-18, 20, 21 ship a single FMS_MainMenuBackground.mp4 (sometimes wrapped in a
+  # named folder with install instructions) that replaces the shipped menu video.
+  # `take: parent` strips the wrapper; the .bak/.txt siblings ride along harmlessly.
+  - id: menu-movie
+    priority: 21
+    when: { hasFile: "**/FMS_MainMenuBackground.mp4" }
+    unless:
+      any:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/*.utoc" }
+        - { hasFile: "Meteorite/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/FMS_MainMenuBackground.mp4"
+    take: parent
+    placeAt: "${menuMoviePath}"
+    modType: hce-menumovie
+
+  # --- Priority 20: LogicMods (Blueprint paks under LogicMods/) → Content/Paks ---
+  - id: logicmods
+    priority: 20
+    when: { hasFile: "**/LogicMods/**" }
+    anchor: "**/LogicMods/"
+    take: self
+    placeAt: "${paksPath}"
+    modType: hce-logicmods
+
+  # --- Priority 22: UE4SS Lua (Scripts/*.lua present) → ue4ss/Mods ---
+  - id: ue4ss-lua
+    priority: 22
+    when: { hasFile: "**/Scripts/*.lua" }
+    unless: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/Scripts/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: hce-ue4ss
+
+  # --- Priority 23: UE4SS Lua (enabled.txt only) → ue4ss/Mods ---
+  - id: ue4ss-lua-enabled
+    priority: 23
+    when: { hasFile: "**/enabled.txt" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/enabled.txt"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: hce-ue4ss
+
+  # --- Priority 24: UE4SS Lua (bare .lua, no Scripts/ dir) → ue4ss/Mods ---
+  - id: ue4ss-lua-bare
+    priority: 24
+    when: { hasFile: "**/*.lua" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: hce-ue4ss
+
+  # --- Priority 16: Root (game-relative archives laid out from the install root) ---
+  # Positioned AFTER the UE4SS loader (so injector packages keep their handling)
+  # but BEFORE logicmods/ue4ss-lua/pak. When an archive is arranged from the
+  # install root (top-level Meteorite/ or Engine/), the whole tree deploys as-is,
+  # so a MIXED mod (lua under Binaries/ + a pak under Content/Paks/) lands every
+  # file in place instead of ue4ss-lua claiming it and dropping the pak.
+  - id: root
+    priority: 16
+    when:
+      any:
+        - { hasFile: "Meteorite/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}"
+    modType: hce-root
+
+  # --- Priority 17: Content folder (project-relative trees: Content/, Config/, Binaries/) ---
+  # Sibling of `root` for archives laid out from the project folder rather than
+  # the install root. Whole tree deploys to ${gamePath}, so a bare Binaries/ tree
+  # correctly lands under the project folder.
+  - id: content-folder
+    priority: 17
+    when:
+      any:
+        - { hasFile: "Content/**" }
+        - { hasFile: "Config/**" }
+        - { hasFile: "Binaries/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${gamePath}"
+    modType: hce-contentfolder
+
+  # --- Priority 27: Loose native DLL plugin (e.g. winmm/dll-injector mods) → Binaries ---
+  - id: native-dll
+    priority: 27
+    when: { hasFile: "**/*.dll" }
+    unless:
+      any:
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/ue4ss/**" }
+        - { hasFile: "**/ReShade.ini" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/Meteorite/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/*.dll"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: hce-binaries
+
+  # --- Priority 28: A Paks/ folder bundled in the archive (not ~mods) → Content/Paks ---
+  - id: pak-alt
+    priority: 28
+    when:
+      all:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Paks/**" }
+    unless:
+      any:
+        - { hasFile: "**/~mods/**" }
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/Meteorite/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/Paks/"
+    take: self
+    placeAt: "${contentPath}"
+    modType: hce-pakalt
+
+  # --- Priority 29: IO Store mod (utoc/ucas without a .pak) → ~mods ---
+  - id: pak-iostore
+    priority: 29
+    when: { hasFile: "**/*.utoc" }
+    unless:
+      any:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Meteorite/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+        - { hasFile: "**/LogicMods/**" }
+    anchor: "**/*.utoc"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: hce-pak
+
+  # --- Priority 30: Default pak mod → flatten into ~mods ---
+  - id: pak
+    priority: 30
+    when: { hasFile: "**/*.pak" }
+    unless:
+      any:
+        - { hasFile: "**/Meteorite/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+        - { hasFile: "**/LogicMods/**" }
+    anchor: "**/*.pak"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: hce-pak
+
+setup:
+  ensureDirs:
+    - ${pakModsPath}
+    # The user-config dir must be created too: UE only writes it on first launch, and
+    # Engine.ini itself is NOT shipped by the game (verified 2026-07-25 — Meteorite and
+    # Subnautica2 both have only GameUserSettings.ini there; Solarpunk's Engine.ini was
+    # mod-created). Deploying a config mod before first launch would otherwise hit a
+    # missing target — the same failure mode fixed for Paralives in 1.3.1.
+    - ${configPath}
+
+toolbarActions:
+  - id: open-ue4ss-settings
+    title: Open UE4SS Settings INI
+    priority: 200
+    target: { openFile: "${ue4ssRootPath}/UE4SS-settings.ini" }
+
+  - id: open-nexus-page
+    title: Open Nexus Page
+    priority: 201
+    target: { openUrl: "https://www.nexusmods.com/halocampaignevolved" }
+
+nexus:
+  modId: 2130            # nexusmods.com/site/mods/2130 (the Vortex extension page)
+  fileGroupId: 7710450
+  displayName: "Halo: Campaign Evolved Support for Vortex"
+
+# Corpus validators: assertions checked against real Nexus archives via
+# `gdl test:corpus --fetch` (needs NEXUS_API_KEY).
+validators:
+  - id: injector-validator
+    name: UE4SS loader archives (dwmapi/xinput/UE4SS-settings.ini) match ue4ss-injector
+    when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    assert: { matched: ue4ss-injector }
+
+  - id: reshade-validator
+    name: ReShade presets (ReShade.ini, no loader) match reshade
+    when:
+      all:
+        - { hasFile: "**/ReShade.ini" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    assert: { matched: reshade }
+
+  - id: logicmods-validator
+    name: Archives with LogicMods paks match logicmods
+    when: { hasFile: "**/LogicMods/**/*.pak" }
+    assert: { matched: logicmods }
+
+  - id: ue4ss-lua-validator
+    name: Bare lua mods (Scripts/*.lua, no loader, not game-relative) match ue4ss-lua
+    when:
+      all:
+        - { hasFile: "**/Scripts/*.lua" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        # Game-relative archives are claimed by root/content-folder and deploy intact.
+        - not: { hasFile: "Meteorite/**" }
+        - not: { hasFile: "Engine/**" }
+        - not: { hasFile: "Content/**" }
+        - not: { hasFile: "Binaries/**" }
+    assert: { matched: ue4ss-lua }
+
+  - id: config-validator
+    name: Bare Engine.ini archives (no payload) match config-ini and land in the user config dir
+    when:
+      all:
+        - { hasFile: "**/{Engine.ini,engine.ini}" }
+        - not: { hasFile: "**/*.pak" }
+        - not: { hasFile: "**/*.utoc" }
+        - not: { hasFile: "**/*.dll" }
+        - not: { hasFile: "**/*.lua" }
+        - not: { hasFile: "Meteorite/**" }
+        - not: { hasFile: "Engine/**" }
+    assert:
+      matched: config-ini
+      placement:
+        - files: "**/{Engine.ini,engine.ini}"
+          mustMatch: "**/Saved/Config/**"
+
+  - id: menu-movie-validator
+    name: FMS_MainMenuBackground.mp4 archives match menu-movie and land in MainMenu_Background
+    when:
+      all:
+        - { hasFile: "**/FMS_MainMenuBackground.mp4" }
+        - not: { hasFile: "**/*.pak" }
+        - not: { hasFile: "**/*.utoc" }
+        - not: { hasFile: "Meteorite/**" }
+        - not: { hasFile: "Engine/**" }
+    assert:
+      matched: menu-movie
+      placement:
+        - files: "**/FMS_MainMenuBackground.mp4"
+          mustMatch: "**/Content/Movies/MainMenu_Background/**"
+
+  # Placement guard: regardless of which pak installer wins, IoStore pak payloads
+  # must land under Content/Paks and never loose at the game-folder root (a .ucas
+  # at the root is silently ignored by UE and is a common mis-route).
+  - id: pak-payload-placement
+    name: .pak/.ucas/.utoc install under Content/Paks, never at the game root
+    when: { hasFile: "**/*.{pak,ucas,utoc}" }
+    assert:
+      placement:
+        - files: "**/*.{pak,ucas,utoc}"
+          mustMatch: "**/Content/Paks/**"
+          mustNotMatch: "${installPath}/*"
+
+tests:
+  corpus: nexus
+  # Every case below mirrors a REAL archive on the game's Nexus page (mod id noted),
+  # read from the actual archive listings — not invented shapes.
+  cases:
+    # --- UE4SS loader: mod 9 "UE4SS for Halo Campaign Evolved" ---
+    - name: "ue4ss-injector: dwmapi.dll + ue4ss tree (mod 9)"
+      archive:
+        - dwmapi.dll
+        - ue4ss/LICENSE
+        - ue4ss/Mods/BPModLoaderMod/Scripts/main.lua
+        - ue4ss/Mods/BPModLoaderMod/load_order.txt
+      expect:
+        matched: ue4ss-injector
+        modType: hce-ue4ss-injector
+        plan:
+          - ${binariesPath}/dwmapi.dll
+          - ${binariesPath}/ue4ss/LICENSE
+          - ${binariesPath}/ue4ss/Mods/BPModLoaderMod/Scripts/main.lua
+          - ${binariesPath}/ue4ss/Mods/BPModLoaderMod/load_order.txt
+
+    # --- UE4SS Lua mod: mod 14 "HCEDebugMenu", mod 40 "SkullUnlocker" ---
+    - name: "ue4ss-lua: named folder with Scripts/main.lua + enabled.txt (mods 14, 40)"
+      archive:
+        - HCEDebugMenu/enabled.txt
+        - HCEDebugMenu/README.md
+        - HCEDebugMenu/Scripts/main.lua
+      expect:
+        matched: ue4ss-lua
+        modType: hce-ue4ss
+        plan:
+          - ${ue4ssModsPath}/HCEDebugMenu/enabled.txt
+          - ${ue4ssModsPath}/HCEDebugMenu/README.md
+          - ${ue4ssModsPath}/HCEDebugMenu/Scripts/main.lua
+
+    # --- Pak triplet, bare at archive root: mods 12, 24, 32, 35, 37 ---
+    - name: "pak: bare pak/ucas/utoc triplet at root (mod 35 MarkIV)"
+      archive:
+        - MarkIV_In_Main_P.pak
+        - MarkIV_In_Main_P.ucas
+        - MarkIV_In_Main_P.utoc
+      expect:
+        matched: pak
+        modType: hce-pak
+        plan:
+          - ${pakModsPath}/MarkIV_In_Main_P.pak
+          - ${pakModsPath}/MarkIV_In_Main_P.ucas
+          - ${pakModsPath}/MarkIV_In_Main_P.utoc
+
+    # --- Single bare .pak (no ucas/utoc): mods 42, 43, 44, 45 ---
+    - name: "pak: single bare .pak (mod 44 MagnumOG)"
+      archive:
+        - MagnumOG_P.pak
+      expect:
+        matched: pak
+        modType: hce-pak
+        plan:
+          - ${pakModsPath}/MagnumOG_P.pak
+
+    # --- Archive that already contains a ~mods/ folder: mod 46 ---
+    - name: "pak: archive pre-wrapped in ~mods/ (mod 46 Shotgun Blue Lights)"
+      archive:
+        - ~mods/Shotgun_Blue_Lights_Darker_P.pak
+        - ~mods/Shotgun_Blue_Lights_Darker_P.ucas
+        - ~mods/Shotgun_Blue_Lights_Darker_P.utoc
+      expect:
+        matched: pak
+        modType: hce-pak
+        plan:
+          - ${pakModsPath}/Shotgun_Blue_Lights_Darker_P.pak
+          - ${pakModsPath}/Shotgun_Blue_Lights_Darker_P.ucas
+          - ${pakModsPath}/Shotgun_Blue_Lights_Darker_P.utoc
+
+    # --- pak-alt: archive laid out from Content/ (carries its own Paks/ folder) ---
+    # Inherited from the solarpunk template; NO current Halo mod ships this shape, so this
+    # case is the only thing exercising the rule. Kept because it's a real UE5 layout and
+    # without it such an archive would fall through to `pak` and have its subfolders
+    # flattened into ~mods — a silent difference. The `unless: **/~mods/**` guard makes
+    # pak-alt decline already-~mods-shaped archives (mods 43, 46) so they flatten instead.
+    - name: "pak-alt: bundled Paks/ folder deploys under Content/ (no real mod yet)"
+      archive:
+        - mod/Paks/sub/x.pak
+        - mod/Paks/sub/x.ucas
+        - mod/Paks/sub/x.utoc
+      expect:
+        matched: pak-alt
+        modType: hce-pakalt
+        plan:
+          - ${contentPath}/Paks/sub/x.pak
+          - ${contentPath}/Paks/sub/x.ucas
+          - ${contentPath}/Paks/sub/x.utoc
+
+    # --- IoStore-only (.utoc, no .pak): mod 19 "Pakchunk0 WinGDK" ---
+    - name: "pak-iostore: lone .utoc with no .pak (mod 19)"
+      archive:
+        - pakchunk0-WinGDK.utoc
+      expect:
+        matched: pak-iostore
+        modType: hce-pak
+        plan:
+          - ${pakModsPath}/pakchunk0-WinGDK.utoc
+
+    # --- Engine.ini config tweak: mods 3, 5, 31 (and 8 via .rar) ---
+    - name: "config-ini: bare Engine.ini → user config dir (mods 3, 5, 31)"
+      archive:
+        - Engine.ini
+      expect:
+        matched: config-ini
+        modType: hce-config
+        plan:
+          - ${configPath}/Engine.ini
+
+    # Mod 29 ships it LOWERCASE — the brace pattern must catch both spellings.
+    - name: "config-ini: lowercase engine.ini also matches (mod 29)"
+      archive:
+        - engine.ini
+      expect:
+        matched: config-ini
+        modType: hce-config
+        plan:
+          - ${configPath}/engine.ini
+
+    # --- Main-menu background video, wrapped in a named folder: mods 15-18 ---
+    - name: "menu-movie: mp4 in a named folder is stripped (mod 15)"
+      archive:
+        - Halo CE OG Background/FMS_MainMenuBackground.mp4
+        - Halo CE OG Background/Install Instructions.txt
+      expect:
+        matched: menu-movie
+        modType: hce-menumovie
+        plan:
+          - ${menuMoviePath}/FMS_MainMenuBackground.mp4
+          - ${menuMoviePath}/Install Instructions.txt
+
+    # --- Same category, bare at archive root: mod 20 ---
+    - name: "menu-movie: bare mp4 at archive root (mod 20)"
+      archive:
+        - FMS_MainMenuBackground.mp4
+      expect:
+        matched: menu-movie
+        modType: hce-menumovie
+        plan:
+          - ${menuMoviePath}/FMS_MainMenuBackground.mp4
+
+    # --- Game-relative tree: mod 6 "No-Intro-Splash", mod 34 "Recoded Movies" ---
+    - name: "root: Meteorite/-relative tree deploys intact (mods 6, 34)"
+      archive:
+        - Meteorite/Content/Movies/LogoParade.mp4
+        - Meteorite/Content/Splash/Splash.bmp
+        - ReadMe.txt
+      expect:
+        matched: root
+        modType: hce-root
+        plan:
+          - ${installPath}/Meteorite/Content/Movies/LogoParade.mp4
+          - ${installPath}/Meteorite/Content/Splash/Splash.bmp
+          - ${installPath}/ReadMe.txt
+
+    # --- ReShade-style addon shipped game-relative: mods 11, 26 (ShaderToggler) ---
+    # Must stay with `root` so the dll lands in Binaries/Win64, not flattened.
+    - name: "root: ShaderToggler addon under Meteorite/Binaries (mods 11, 26)"
+      archive:
+        - Meteorite/Binaries/Win64/dxgi.dll
+        - Meteorite/Binaries/Win64/ShaderToggler.addon64
+        - Meteorite/Binaries/Win64/ShaderToggler.ini
+      expect:
+        matched: root
+        modType: hce-root
+        plan:
+          - ${installPath}/Meteorite/Binaries/Win64/dxgi.dll
+          - ${installPath}/Meteorite/Binaries/Win64/ShaderToggler.addon64
+          - ${installPath}/Meteorite/Binaries/Win64/ShaderToggler.ini
+
+    # --- Guard: a config bundled WITH a pak must not be reduced to a config drop ---
+    # config-ini's `unless` excludes archives carrying real payload; this asserts the
+    # pak still wins so the payload isn't dropped.
+    - name: "config-ini does not steal archives that also ship a pak"
+      archive:
+        - SomeMod/Engine.ini
+        - SomeMod/SomeMod_P.pak
+      expect:
+        matched: pak
+        modType: hce-pak
+        plan:
+          - ${pakModsPath}/Engine.ini
+          - ${pakModsPath}/SomeMod_P.pak
