@@ -7,12 +7,16 @@ description: Use when implementing a NEW Vortex game extension in the gdl-games 
 
 Creates a new game extension in this monorepo from two inputs — the **Nexus site/extension id**
 (the extension's mod page on `nexusmods.com/site`, used as `nexus.modId`) and the **game name**.
-Researches the game, writes `games/<id>/game.yaml`, fetches and crops the gameart, supports every
+Researches the game, writes `games/<id>/game.yaml`, downloads the gameart tile, supports every
 mod currently on the game's Nexus page (verified by the corpus loop), adds unit tests, and gets the
 extension building green. It does **not** commit or release — that's left to the maintainer.
 
-Detailed, reusable research methods (store ids, the artwork URL scheme, corpus mechanics, the
-template map) live in `references/research-recipes.md` — read it before Step 2.
+**Read first:** [`gdl/README.md`](../../../gdl/README.md) is authoritative for the `game.yaml` DSL
+and [`docs/corpus-manifests.md`](../../../docs/corpus-manifests.md) for how corpus verification
+works and fails. This skill covers only how to research a game and drive it to green.
+
+Reusable research methods (store ids, the artwork URL scheme, the template map) live in
+`references/research-recipes.md` — read it before Step 2.
 
 ## Workflow
 
@@ -22,8 +26,8 @@ digraph implement {
   inputs   [label="Ask: site/extension id + game name"];
   resolve  [label="1. Resolve domain, game id, fileGroupId"];
   research [label="2. Research engine, exe, stores, mod layout"];
-  author   [label="3. Author game.yaml + fetch gameart"];
-  corpus   [label="4. Corpus loop: fetch ALL mods, route each"];
+  author   [label="3. Author game.yaml + gameart\n3b. Document findings as game.yaml comments"];
+  corpus   [label="4. Corpus loop: route EVERY mod\n(reconcile the count — green can be vacuous)"];
   covered  [label="Every mod matched\n(or documented-skip)?" shape=diamond];
   units    [label="5. Unit tests mirror real mod shapes"];
   build    [label="6. Build + test + corpus all green"];
@@ -89,90 +93,139 @@ rather than guessing.
 
 ## Step 3: Author game.yaml + gameart
 
-Scaffold `games/<id>/game.yaml` by copying the closest template (Step 2) and adapting it. Required
-shape:
+Scaffold `games/<id>/game.yaml` by **copying the closest template** (Step 2) and adapting it. Field
+semantics — every key, predicate, `take`/`anchor`/`placeAt`, and the built-in facts (`installPath`,
+`store`, `arch`, `appDataLocal`, …) — are documented in [`gdl/README.md`](../../../gdl/README.md).
+Don't restate them here; copy a template and change what the research in Step 2 established.
 
-```yaml
-gdl: 1
-version: 0.0.1
-game:
-  id: <domain>
-  name: <Game Name>
-  executable: <Launcher>.exe
-  requiredFiles: [<Launcher>.exe]
-  logo: gameart.webp
-  nexusDomain: <domain>
-  details:
-    steamAppId: <id>
-    epicAppId: "<AppName>"       # omit if not confirmed
-    supportsSymlinks: true
-    gameProjectFolder: <ProjectFolder>
-stores:
-  steam: "<id>"                  # + epic/xbox when confirmed (recipe §2)
-context: { ... }                 # arch/gamePath storeBranch + derived paths (copy template)
-modTypes: [ ... ]
-installers: [ ... ]
-setup:
-  ensureDirs: [ ${pakModsPath} ]
-toolbarActions:
-  - { id: open-nexus-page, title: Open Nexus Page, priority: 200, target: { openUrl: "https://www.nexusmods.com/<domain>" } }
-nexus:
-  modId: <site id>
-  fileGroupId: <group id>
-  displayName: <Game Name> Support for Vortex
-tests:
-  corpus: nexus
-  cases: []                      # filled in Step 5
-validators: []                   # filled in Step 4
-```
+The decisions a template *can't* make for you:
 
-- Add `src/hooks.ts` **only** if `game.yaml` references a hook (e.g. `discovery.version: { hook }`
-  for a non-UTF-8 version file, or `events.did-deploy` for UE4SS `mods.txt` regen) — copy and adapt
-  `games/subnautica2/src/hooks.ts`.
-- **Gameart**: query `game{ id artworkSchema }`, download the `hero` image, and crop/resize to a
-  **640×360** 16:9 WebP at `games/<id>/gameart.webp` (recipe §3). Verify dimensions with `file`.
+- **Which stores to declare.** Steam alone ships. Add `epic`/`xbox` only with confirmed ids
+  (recipe §2) — omit rather than guess, and say **why** in a comment (see Step 3b).
+- **`executable` / `requiredFiles`.** These are literal relative paths with no glob expansion. If the
+  shipping exe is nested (`<Project>/Binaries/Win64/<Game>.exe`) they must include that path; if the
+  Xbox build differs (`WinGDK`), a Win64-only value means Xbox won't auto-detect — which is a reason
+  to omit the `xbox` store.
+- **Whether `src/hooks.ts` is needed** — only if `game.yaml` references a hook (e.g.
+  `discovery.version: { hook }` for a non-UTF-8 version file, or `events.did-deploy` for UE4SS
+  `mods.txt` regen). Copy and adapt `games/subnautica2/src/hooks.ts`.
+- **`version: 0.0.1`** to start. Never bump it as part of authoring — a bump merged to `main`
+  publishes to Nexus.
+- **Gameart**: download the **tile** image to `games/<id>/gameart.webp` and keep it **as-is** — no
+  cropping or re-encoding (recipe §3):
+  `curl -s -o games/<id>/gameart.webp https://images.nexusmods.com/images/games/v2/<gameId>/tile.jpg`
+  Verify with `file games/<id>/gameart.webp` that it's a real WebP (tiles are portrait, e.g. 400×600).
+
+## Step 3b: Document as you go
+
+Per-game research lives in **`#` comment blocks inside `game.yaml`** — not in a separate file.
+**Do not create `games/<id>/README.md`.** Rationale sits on the line it explains, so it can't drift.
+
+Exemplars: `games/solarpunk/game.yaml`, `games/halocampaignevolved/game.yaml`.
+
+Write, as you learn it:
+
+- A **header block** at the top: game (+ developer), engine and version, project folder, and which
+  mod categories are supported.
+- **Provenance for every non-obvious value** — e.g.
+  `# verified against the Steam depot manifest for app 2806050 (manifest 8153709523381701809)`.
+- **`# unverified — confirm on a real install`** on anything you inferred rather than observed. A
+  wrong path often still builds and tests green, so an honest marker is the only warning.
+- **Omission rationale** — why `epic`/`xbox` is absent. Silent omission reads as an oversight.
+- **Per-installer banners** giving the priority, what it matches, and *why each `unless` arm exists*,
+  citing real mod ids as evidence.
+- A **corpus-state note** if coverage is incomplete or the cache was hand-generated (precedent:
+  `games/assassinscreedblackflagresynced/game.yaml`).
 
 ## Step 4: Corpus loop — support every current mod
 
-This is the core. With `tests.corpus: nexus`:
+The corpus routes **real** published mods through your installers. It is a *discovery* tool: what it
+finds must be promoted into `tests.cases` (Step 5), because the cache is gitignored and CI never
+runs the corpus.
 
-```sh
-pnpm nx run <id>:test-corpus -- --fetch
-```
+> **A green corpus run does not mean it worked.** An all-failed fetch prints `✖` lines and
+> **exits 0**; an empty cache prints `no archives in tests/cache/ — nothing to do` and also exits 0.
+> Read [`docs/corpus-manifests.md`](../../../docs/corpus-manifests.md) before trusting any result.
 
-This fetches every published mod's file-listing for the `nexusDomain` and routes each through the
-installers. For every **unmatched** or **misrouted** mod:
+Do these in order:
 
-1. Inspect its cached manifest in `games/<id>/tests/cache/*.json` to see the real file tree.
-2. Add or adjust `modTypes` + `installers` so it routes to the correct location.
-3. Re-run and confirm no regressions on the already-matched mods.
+1. **Get the real mod count** — `mods` from `GET https://api.nexusmods.com/v1/games/<domain>.json`.
+   You need it to tell success from silence.
+2. **Fetch.** Add `--limit 100` on a large catalogue, or `--mods 1,2,3` to scope:
+   ```sh
+   pnpm nx run <id>:test-corpus -- --fetch
+   ```
+3. **Reconcile.** Compare `T` in `summary: N matched, M unmatched, K failed, T total` against the
+   count from (1). `T=0`, `0 matched`, or `nothing to do` are **FAILURES, not passes**.
+4. **If manifests 404** (currently expected for any upload after ~11 June 2026), generate listings
+   from the archives instead, then route them locally — note the **absent** `--fetch`:
+   ```sh
+   node tools/corpus/list-archive.mjs --domain <domain> --game-id <gameId> --all \
+     --out games/<id>/tests/cache
+   pnpm nx run <id>:test-corpus
+   ```
+5. **Only then iterate** on unmatched/misrouted mods: inspect the cached listing, adjust
+   `modTypes` + `installers`, re-run, and confirm no regressions on already-matched mods.
 
-Iterate until **every published mod matches the correct installer**, or is intentionally
-unsupported with a documented reason. The bar for "intentionally unsupported" is high — only genuine
-non-mod-manager content (save files, standalone tools, docs-only uploads). When in doubt, support it.
+Iterate until every published mod matches the correct installer, or is intentionally unsupported
+with a documented reason. The bar is high — see the list of legitimate non-matches in
+`docs/corpus-manifests.md`. When in doubt, support it.
 
 Add `validators` asserting the key routings (e.g. `dwmapi.dll → ue4ss-injector`,
 `ReShade.ini → reshade`, `**/*.utoc` without `.pak → pak-iostore`). A validator must be able to
 fail — don't write one that passes for any input.
 
+### Mod categories that install-dir-shaped rules miss
+
+Copying a pak-based template is **not sufficient**. On `halocampaignevolved`, 11 of 38 real mods were
+unmatched under solarpunk-parity rules. Check explicitly for:
+
+- **Config-file tweaks** (`Engine.ini`) — UE reads user config from
+  `${appDataLocal}/<ProjectFolder>/Saved/Config/<TargetPlatform>`, **not** the install dir. This was
+  the single most common category on that game (5 of 38, plus another appearing mid-review).
+  - **The `<TargetPlatform>` leaf varies per game/build** — `Windows` (UE5 unified),
+    `WindowsClient` (client-only), `WindowsNoEditor` (UE4). **Verify it against a real install** or
+    ask; do not copy another game's. Assuming `WindowsClient` for Halo was wrong — it's `Windows`.
+  - Authors ship **both** `Engine.ini` and `engine.ini` — brace-match both spellings.
+  - Keep the validator's `placement` loose (`**/Saved/Config/**`) so it doesn't bake in the leaf.
+  - **Add the config dir to `setup.ensureDirs`.** UE creates it on first launch and does *not*
+    ship `Engine.ini` at all (verified: Meteorite and Subnautica2 have only
+    `GameUserSettings.ini`), so deploying before first launch hits a missing target — the
+    "Deployment target unknown" failure fixed for `games/paralives`. Any deploy target outside
+    the install dir needs this.
+- **Asset / media replacement** — a bare file overwriting shipped content (e.g.
+  `FMS_MainMenuBackground.mp4`), needing its own modType pointing at that content subfolder
+  (6 of 38).
+- **Both need `unless` guards** excluding `**/*.pak`, `**/*.utoc`, `**/*.dll`, `**/*.lua` and
+  game-relative trees (`<ProjectFolder>/**`, `Engine/**`), so a mod bundling a config *alongside* a
+  pak keeps its pak routing instead of being reduced to a config drop. **Add a `tests.cases` entry
+  asserting that guard**, or it is untested.
+
+Working reference: `games/halocampaignevolved/game.yaml` (`configPath`/`menuMoviePath` in `context`,
+the `config-ini` and `menu-movie` installers, and their validators). `${appDataLocalLow}` also
+exists — see `games/paralives/game.yaml`.
+
 ## Step 5: Unit tests
 
-Add a `tests.cases` entry for each real mod category found in Step 4, using the actual archive
-shapes (e.g. the exact `Better Stacks/0_BetterStacks_P.pak` triplet). Each case asserts `matched`,
-`modType`, and the resolved `plan`. Run:
+Add a `tests.cases` entry for each real mod category found in Step 4, using the **actual archive
+shapes** (e.g. the exact `Better Stacks/0_BetterStacks_P.pak` triplet) — never invented ones. Each
+case asserts `matched`, `modType`, and the resolved `plan`. Note the real mod id in a comment so the
+shape can be re-checked later.
 
 ```sh
 pnpm nx run <id>:test
 ```
 
-These are deterministic and run in CI (the corpus is local-only), so they're the regression guard.
+These are deterministic and run in CI, whereas the corpus is local-only and its cache is gitignored
+— so **these cases are the only durable regression guard**. Every category the corpus revealed must
+appear here, including one case per `unless` guard that would fail if the guard were removed.
 
 ## Step 6: Build & verify
 
 ```sh
 pnpm nx run <id>:build                  # "build ok"
 pnpm nx run <id>:test                   # unit cases green
-pnpm nx run <id>:test-corpus -- --fetch # all mods matched, validators pass
+pnpm nx run <id>:test-corpus -- --fetch # see Step 4: reconcile the count, don't just read "matched"
 ```
 
 Confirm `games/<id>/dist/info.json` has the right `version` and a `<id>-vortex-v<version>.zip` is
@@ -188,15 +241,27 @@ Tool: Agent
   model: sonnet
   description: "Review new game extension"
   prompt: |
-    Review the new Vortex game extension at games/<id>/ in C:\oss\gdl-games. Verify:
+    Review the new Vortex game extension at games/<id>/ (repo root is the current working
+    directory). Verify:
     1. game.yaml is well-formed; `pnpm nx run <id>:build` succeeds.
     2. Store ids match what Vortex actually matches: steam=app id, epic=manifest AppName,
        xbox=package Identity Name (not the 9N store id). Flag any guessed/placeholder id.
     3. `pnpm nx run <id>:test` passes and the tests.cases mirror real mod shapes (not trivial).
-    4. `pnpm nx run <id>:test-corpus -- --fetch` shows every published mod matched (or an
-       intentional, documented skip) and validators pass.
+    4. Corpus coverage is real, not vacuous: compare the `summary: … T total` line against the
+       `mods` count from api.nexusmods.com/v1/games/<domain>.json. `0 matched`, `T=0`, or
+       "nothing to do" is a FAILURE even though it exits 0 (see docs/corpus-manifests.md).
+       Any shortfall must be documented in game.yaml comments.
     5. Every validator can actually fail (trace a bad input). Flag vacuous ones.
-    6. gameart.webp exists and is 640x360.
+    6. Any path that was assumed rather than observed is flagged `# unverified` — especially a UE
+       user-config leaf (Saved/Config/<TargetPlatform> varies per game) and store-specific exe
+       paths. A wrong path can build and test green.
+    7. game.yaml carries the comment blocks from Step 3b (header, provenance, omission rationale).
+       There must be no games/<id>/README.md.
+       For an ALREADY-PUBLISHED game, also flag any renamed/removed modType id — it orphans users'
+       installed mods and nothing in the build catches it (docs/published-extension-stability.md).
+    8. gameart.webp exists and is a valid WebP of the game's tile.jpg, saved uncropped (tiles are
+       portrait, e.g. 400x600). Minor art issues are low severity — it's a fallback Vortex only uses
+       when it can't load tile art from the site.
     Report PASS, or ISSUES with specific file:line problems. Be strict.
 ```
 
@@ -212,6 +277,20 @@ is ready and they can commit/push (and bump `version`) when they want to release
 ## Conventions
 
 - Run Nx via `pnpm nx …` (it's a local dependency — bare `nx` needs a global install). The corpus
-  target is `test-corpus` (hyphen); the underlying gdl CLI subcommand is `test:corpus`.
+  target is `test-corpus` (hyphen); the underlying gdl CLI subcommand is `test:corpus`, which also
+  accepts `--limit N` and `--mods 1,2,3` (pass them after `--`).
 - Never print the `NEXUS_API_KEY` value.
-- Don't invent store/nexus ids. Omit a store, or ask, rather than guess.
+- Don't invent store/nexus ids, or any path. Omit, mark `# unverified`, or ask — rather than guess.
+- Per-game research goes in `game.yaml` comments (Step 3b). No per-game README.
+- `gdl/` is a **separate repository** (a submodule). Don't change it as part of authoring a game —
+  propose it separately.
+- Never commit, push, tag, or bump `version:`. A version bump merged to `main` publishes to Nexus.
+
+## Reference
+
+- [`gdl/README.md`](../../../gdl/README.md) — the DSL: every `game.yaml` key, predicates,
+  `take`/`anchor`/`placeAt`, built-in facts, CLI flags. **Authoritative; this skill does not restate it.**
+- [`README.md`](../../../README.md) — repo setup, Nx targets, release process.
+- [`docs/corpus-manifests.md`](../../../docs/corpus-manifests.md) — corpus mechanics, the
+  silent-pass trap, the manifest outage, and the offline workaround.
+- `references/research-recipes.md` — the curl recipes and the template map.
