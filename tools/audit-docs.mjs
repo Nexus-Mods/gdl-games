@@ -8,8 +8,10 @@
  *
  *   1. every games/<id>/ appears in the skill's template map (and the map names no game
  *      that doesn't exist)
- *   2. no doc hardcodes an absolute path (e.g. C:\... ) — they break on other checkouts
- *   3. relative links in the docs we own actually resolve
+ *   2. every game.yaml's nexus.displayName matches the pattern the Nexus publish API
+ *      accepts — a violation only fails after merge, once the ledger tag already exists
+ *   3. no doc hardcodes an absolute path — they break on other checkouts
+ *   4. relative links in the docs we own actually resolve
  *
  * Deliberately NOT checked: whether each game.yaml carries a header comment block. New games
  * get one (the skill's Step 3b covers it), but mechanically enforcing it across every existing
@@ -56,7 +58,28 @@ for (const m of mapText.matchAll(/games\/([a-z0-9]+)`/g)) {
   }
 }
 
-// --- 2. no absolute paths in docs -----------------------------------------
+// --- 2. nexus.displayName matches what the Nexus publish API accepts -------
+//
+// The mod-file-version endpoint validates `name` against this pattern and returns a 422
+// otherwise. displayName is release metadata read from game.yaml by CI, not compiled into
+// the bundle, so build/test/corpus all pass and the failure only appears after merge —
+// after the ledger tag has already been created. Halo shipped a colon and broke on it.
+
+const DISPLAY_NAME_OK = /^[a-zA-Z0-9 _'().-]+$/;
+
+for (const g of games) {
+  const rel = `games/${g}/game.yaml`;
+  const m = read(rel).match(/^\s+displayName:\s*(.+?)\s*$/m);
+  if (!m) continue;                                  // no nexus: block yet — fine
+  const value = m[1].replace(/^["']|["']$/g, '');
+  if (!DISPLAY_NAME_OK.test(value)) {
+    const bad = [...new Set(value.split('').filter(c => !DISPLAY_NAME_OK.test(c)))].join(' ');
+    problems.push(`${rel}: nexus.displayName "${value}" contains character(s) [${bad}] that the `
+      + `Nexus publish API rejects (must match ${DISPLAY_NAME_OK.source}) — publishing will 422`);
+  }
+}
+
+// --- 3. no absolute paths in docs -----------------------------------------
 
 for (const rel of DOCS) {
   const text = read(rel);
@@ -66,7 +89,7 @@ for (const rel of DOCS) {
   }
 }
 
-// --- 3. relative links resolve --------------------------------------------
+// --- 4. relative links resolve --------------------------------------------
 
 for (const rel of DOCS) {
   const text = read(rel);

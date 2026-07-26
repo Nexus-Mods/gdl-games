@@ -62,6 +62,22 @@ this.api.registerModType(mt.id, 50, (gameId) => gameId === decl.id,
   new installs but silently leaves existing ones on the old path. That's usually acceptable; it
   should still be stated.
 
+## Release-time failures the build can't catch
+
+Some `game.yaml` fields are **release metadata read by CI**, not compiled into the bundle — so
+`build`, `test` and `test-corpus` all pass regardless of their value, and a bad one only fails
+during publish, *after* the ledger tag has been created.
+
+- **`nexus.displayName` must match `^[a-zA-Z0-9 _'().-]+$`.** The Nexus mod-file-version endpoint
+  422s otherwise. Halo shipped `"Halo: Campaign Evolved Support for Vortex"`; the colon failed the
+  publish while the upload itself had already succeeded. `tools/audit-docs.mjs` now checks this.
+- **The tag is created before the publish succeeds.** `ci.yml` creates the GitHub release and
+  `<id>-v<version>` tag *then* uploads to Nexus. A publish failure therefore leaves the version
+  permanently marked as shipped, and re-running CI does nothing. **Recovery requires a version
+  bump**, not a retry — which also means a failed publish burns a version number.
+
+If you add a new field that CI reads at release time, consider whether it needs a guard here too.
+
 ## Unknowns worth resolving
 
 The precise user-facing symptom of an orphaned modType — silent fallback, an error, a mod that can't
