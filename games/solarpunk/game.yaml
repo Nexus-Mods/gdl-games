@@ -1,5 +1,5 @@
 gdl: 1
-version: 0.2.1   # extension version — drives info.json, the release tag, and the zip name
+version: 1.0.0   # extension version — drives info.json, the release tag, and the zip name
 
 # Solarpunk (rokaplay / Cyberwave) — Unreal Engine 5 (5.7.x), IoStore paks.
 # Supports: pak mods (Content/Paks/~mods), LogicMods, UE4SS (loader + Lua mods),
@@ -9,8 +9,26 @@ version: 0.2.1   # extension version — drives info.json, the release tag, and 
 game:
   id: solarpunk
   name: Solarpunk
-  executable: Solarpunk.exe          # UE5 bootstrap launcher at the install root
+  # UE bootstrap shim at the install root, NOT the shipping exe — Steam's real binary is
+  # Solarpunk/Binaries/Win64/SolarpunkSteam-Win64-Shipping.exe (OriginalFilename
+  # BootstrapPackagedGame-Win64-Shipping.exe on the shim).
+  #
+  # Deliberately NOT storeBranch'd, and a real Game Pass install proves why: the shim ships
+  # on Xbox too, at the same relative path (Solarpunk.exe at the Content root, same 230,400
+  # bytes), while the nested shipping exe is renamed per store —
+  #   Steam: Binaries/Win64/SolarpunkSteam-Win64-Shipping.exe
+  #   Xbox:  Binaries/WinGDK/Solarpunk-WinGDK-Shipping.exe      (target loses "Steam")
+  # Branching onto the nested path would have meant guessing that rename, and a wrong
+  # `executable` makes Vortex silently report getGameVersion as 0.0.0. The shim abstracts
+  # it away. Verified on D:\XboxGames\Solarpunk 2026-07-27.
+  executable: Solarpunk.exe
   requiredFiles: [Solarpunk.exe]
+  # Required for Game Pass: without it Vortex bare-spawns the exe, which a GDK build
+  # rejects — and reports as a SUCCESSFUL launch, so the Play button silently does nothing.
+  # appId comes from stores.xbox below; appExecName is the package's Application/@Id,
+  # confirmed from the appxmanifest.xml of a real Game Pass install (and independently from
+  # the store catalog, product 9N8BRH7PGJMJ).
+  xboxLauncher: { appExecName: AppSolarpunkShipping }
   logo: gameart.webp
   author: Nexus Mods
   nexusDomain: solarpunk
@@ -25,7 +43,11 @@ stores:
   epic: "408e96c974c54d478cb18296164dcbfe"
   # Xbox value is the package Identity Name (Vortex matches the appsFolder key before '_').
   # Store listing id is 9N8BRH7PGJMJ; package family is rokapublish.Solarpunk_6q4vfhsywtz4j.
-  # The xbox install path/exe layout is unverified — confirm on a Game Pass install.
+  # VERIFIED on a real Game Pass install 2026-07-27 (D:\XboxGames\Solarpunk): the
+  # appxmanifest's Identity/@Name is exactly this value, the discovered root is the Content
+  # folder (holding Solarpunk.exe + the Solarpunk/ project folder + Engine/, as on Steam),
+  # and Binaries/WinGDK exists as `arch` below expects. Supersedes the earlier note that the
+  # layout was unverified and inferred from Subnautica 2.
   xbox: "rokapublish.Solarpunk"
 
 context:
@@ -37,8 +59,9 @@ context:
   # The UE project nests under a Solarpunk/ folder beneath the discovered install
   # path on EVERY store — including Xbox/Game Pass, where the discovered path is the
   # ...\Content folder (it holds Solarpunk.exe plus the Solarpunk/ project folder).
-  # Mirrors the layout verified on a real Subnautica 2 Game Pass install; confirm on
-  # a Solarpunk Game Pass install if one becomes available. Only `arch` differs (above).
+  # Verified directly on a Solarpunk Game Pass install 2026-07-27 (previously this was
+  # inferred from Subnautica 2). Only `arch` differs (above): Binaries/WinGDK confirmed
+  # present, and Content/Paks resolves identically to Steam.
   gamePath: ${installPath}/Solarpunk
 
   pakModsPath:   ${gamePath}/Content/Paks/~mods
