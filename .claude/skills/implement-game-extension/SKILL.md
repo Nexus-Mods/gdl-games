@@ -102,10 +102,23 @@ The decisions a template *can't* make for you:
 
 - **Which stores to declare.** Steam alone ships. Add `epic`/`xbox` only with confirmed ids
   (recipe §2) — omit rather than guess, and say **why** in a comment (see Step 3b).
-- **`executable` / `requiredFiles`.** These are literal relative paths with no glob expansion. If the
-  shipping exe is nested (`<Project>/Binaries/Win64/<Game>.exe`) they must include that path; if the
-  Xbox build differs (`WinGDK`), a Win64-only value means Xbox won't auto-detect — which is a reason
-  to omit the `xbox` store.
+- **Xbox needs three separate values**, each for a different subsystem — an id alone is not enough:
+  the **Identity Name** (`stores.xbox`) for *discovery*, **`appExecName`** (`game.xboxLauncher`) for
+  *launching*, and the **exe path** (`game.executable`) for *process monitoring* and version detection.
+  All three come from one `displaycatalog` query or one `appxmanifest.xml`. Recipe §2 has the commands.
+  Most games need none of this: a scalar `executable: MyGame.exe` is the normal case, and you only reach
+  for a `storeBranch` when the exe path itself differs per store (Xbox `Binaries/WinGDK` vs Steam
+  `Binaries/Win64`). Exemplar: `games/halocampaignevolved/game.yaml`.
+- **`executable` / `requiredFiles`.** Literal relative paths, no glob expansion — and they serve
+  *different* jobs. `executable` is the launch target; `requiredFiles` is a discovery fingerprint that
+  answers "is this folder really this game?", where **every entry must exist**. They're usually the
+  same string only because the exe is a convenient marker. When a nested exe's path differs by store
+  (`Binaries/Win64` on Steam vs `Binaries/WinGDK` on Xbox), point `requiredFiles` at a file that lives
+  at the same relative path on both, and keep `executable` on the Steam path. For UE5 that's often
+  `<Project>/Content/Paks/global.utoc`, but it depends on IoStore being enabled — verify against a real
+  install rather than assuming, and see recipe §2 for fallbacks (UE4 usually has no `global.*`). Do
+  **not** list both arch paths: all-must-exist means that breaks both stores. A WinGDK layout is not a
+  reason to omit `xbox`.
 - **Whether `src/hooks.ts` is needed** — only if `game.yaml` references a hook (e.g.
   `discovery.version: { hook }` for a non-UTF-8 version file, or `events.did-deploy` for UE4SS
   `mods.txt` regen). Copy and adapt `games/subnautica2/src/hooks.ts`.
@@ -127,8 +140,10 @@ Write, as you learn it:
 
 - A **header block** at the top: game (+ developer), engine and version, project folder, and which
   mod categories are supported.
-- **Provenance for every non-obvious value** — e.g.
-  `# verified against the Steam depot manifest for app 2806050 (manifest 8153709523381701809)`.
+- **Provenance for every non-obvious value** — name the source *and* how it was checked, e.g.
+  `# verified on a real install 2026-07-27` or `# Identity/@Name from the shipped appxmanifest.xml`.
+  Write what you actually did: copying this file's example provenance verbatim into a `game.yaml`
+  produces a citation that looks authoritative and can't be traced (it has happened).
 - **`# unverified — confirm on a real install`** on anything you inferred rather than observed. A
   wrong path often still builds and tests green, so an honest marker is the only warning.
 - **Omission rationale** — why `epic`/`xbox` is absent. Silent omission reads as an oversight.
