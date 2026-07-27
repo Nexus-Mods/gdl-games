@@ -1,11 +1,24 @@
 gdl: 1
-version: 1.4.1
+version: 1.5.0
 
 game:
   id: subnautica2
   name: Subnautica 2
+  # UE bootstrap shim at the install root (OriginalFilename
+  # BootstrapPackagedGame-Win64-Shipping.exe), not the shipping exe — that lives at
+  # Subnautica2/Binaries/Win64/Subnautica2-Win64-Shipping.exe. The shim is deliberately
+  # arch- and target-agnostic, so it needs NO storeBranch: it is the same relative path on
+  # every store, and Vortex reads `executable` for process monitoring and getGameVersion.
+  # Contrast halocampaignevolved, which ships no root shim and therefore does branch.
   executable: Subnautica2.exe
   requiredFiles: [Subnautica2.exe]
+  # Required for Game Pass: without it Vortex bare-spawns the exe, which a GDK build
+  # rejects — and reports as a SUCCESSFUL launch, so the Play button silently does nothing.
+  # appId comes from stores.xbox below; appExecName is the package's Application/@Id,
+  # confirmed from the store catalog (product 9PJPCB188SVG →
+  # Packages[].Applications[].ApplicationId, whose PackageFamilyName
+  # UnknownWorldsEntertainmen.Subnautica2_bh1f6rvenfkm2 matches stores.xbox).
+  xboxLauncher: { appExecName: AppSubnautica2Shipping }
   logo: gameart.webp
   author: Nexus Mods
   nexusDomain: subnautica2
@@ -21,7 +34,10 @@ stores:
   # Xbox/Game Pass: value is the package Identity Name (Vortex matches the
   # appsFolder key before '_'). Package family is
   # UnknownWorldsEntertainmen.Subnautica2_bh1f6rvenfkm2; the Identity Name is the
-  # part before the '_'. Verified on a local Game Pass install (Get-AppxPackage).
+  # part before the '_'. Originally recorded as verified on a local Game Pass install
+  # (Get-AppxPackage) — that machine is no longer available, so re-confirmed 2026-07-27
+  # against the store catalog instead (product 9PJPCB188SVG). The id itself is solid; the
+  # install *layout* claim below is the part that rests on the original observation.
   xbox: "UnknownWorldsEntertainmen.Subnautica2"
 
 context:
