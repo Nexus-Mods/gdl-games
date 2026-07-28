@@ -192,6 +192,10 @@ jobs:
           files: games/${{ matrix.id }}/out/*.zip
           generate_release_notes: true
 
+      # update_mod_version syncs the Nexus mod page version with the version we just
+      # released. Vortex reads the mod page version to decide whether an extension
+      # update is available, so without it a version bump never reaches existing users.
+      # The two mod-manager flags make this upload the file Vortex actually downloads.
       - name: Publish to Nexus Mods
         uses: Nexus-Mods/upload-action@main
         with:
@@ -201,3 +205,6 @@ jobs:
           filename: games/${{ matrix.id }}/out/${{ steps.meta.outputs.zip_name }}
           version: ${{ steps.meta.outputs.version }}
           archive_existing_version: true
+          primary_mod_manager_download: true
+          allow_mod_manager_download: true
+          update_mod_version: true
