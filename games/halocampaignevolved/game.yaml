@@ -118,9 +118,24 @@ modTypes:
 
 installers:
   # --- Priority 15: UE4SS loader (dwmapi/xinput proxy or UE4SS-settings.ini) → Binaries ---
+  # The `unless` is load-bearing, not defensive. This rule's `take: parent` resolves the
+  # install root to Meteorite/Binaries/<arch>, and stripPath drops every file outside that
+  # subtree (gdl/src/runtime/installer-engine.ts:101-151). Mod 68 (Ultra_Plus, Game Pass)
+  # ships the loader under Meteorite/Binaries/WinGDK/ AND a pak triplet under
+  # Meteorite/Content/Paks/~mods/ — and silently lost all three pak files that way.
+  # Declining a game-relative archive here hands it to `root` (16), which deploys the tree
+  # intact. Caught by pak-payload-placement, which fails when a payload class is absent
+  # from the plan entirely.
+  #
+  # subnautica2 solves this differently (root/content-folder at 10/11, ahead of the
+  # injector). Both are correct; this one is narrower and leaves the priority ladder alone.
   - id: ue4ss-injector
     priority: 15
     when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    unless:
+      any:
+        - { hasFile: "Meteorite/**" }
+        - { hasFile: "Engine/**" }
     anchor: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}"
     take: parent
     placeAt: "${binariesPath}"
@@ -381,7 +396,13 @@ nexus:
 validators:
   - id: injector-validator
     name: UE4SS loader archives (dwmapi/xinput/UE4SS-settings.ini) match ue4ss-injector
-    when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    # Game-relative loader bundles are claimed by `root` by design (see installer 15), so
+    # they're excluded here — pak-payload-placement covers their payload instead.
+    when:
+      all:
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "Meteorite/**" }
+        - not: { hasFile: "Engine/**" }
     assert: { matched: ue4ss-injector }
 
   - id: reshade-validator
@@ -626,6 +647,30 @@ tests:
           - ${installPath}/Meteorite/Binaries/Win64/dxgi.dll
           - ${installPath}/Meteorite/Binaries/Win64/ShaderToggler.addon64
           - ${installPath}/Meteorite/Binaries/Win64/ShaderToggler.ini
+
+    # --- Regression: mod 68 "Ultra Plus" (Game Pass) — loader + paks in one tree ---
+    # ue4ss-injector (15) used to claim this and DROP all three pak files: its `take: parent`
+    # install root resolves to Meteorite/Binaries/WinGDK, so everything under
+    # Meteorite/Content/ fell outside and stripPath discarded it. The archive must fall
+    # through to `root` (16) and deploy intact. See the `unless` on installer 15.
+    - name: "root: game-relative loader bundle keeps its paks (mod 68 Ultra_Plus)"
+      archive:
+        - Meteorite/Binaries/WinGDK/dwmapi.dll
+        - Meteorite/Binaries/WinGDK/ue4ss/UE4SS-settings.ini
+        - Meteorite/Binaries/WinGDK/ue4ss/Mods/UltraPlusExtensions/enabled.txt
+        - Meteorite/Content/Paks/~mods/~UltraPlus_HaloCampaignEvolved_P.pak
+        - Meteorite/Content/Paks/~mods/~UltraPlus_HaloCampaignEvolved_P.ucas
+        - Meteorite/Content/Paks/~mods/~UltraPlus_HaloCampaignEvolved_P.utoc
+      expect:
+        matched: root
+        modType: hce-root
+        plan:
+          - ${installPath}/Meteorite/Binaries/WinGDK/dwmapi.dll
+          - ${installPath}/Meteorite/Binaries/WinGDK/ue4ss/UE4SS-settings.ini
+          - ${installPath}/Meteorite/Binaries/WinGDK/ue4ss/Mods/UltraPlusExtensions/enabled.txt
+          - ${installPath}/Meteorite/Content/Paks/~mods/~UltraPlus_HaloCampaignEvolved_P.pak
+          - ${installPath}/Meteorite/Content/Paks/~mods/~UltraPlus_HaloCampaignEvolved_P.ucas
+          - ${installPath}/Meteorite/Content/Paks/~mods/~UltraPlus_HaloCampaignEvolved_P.utoc
 
     # --- Guard: a config bundled WITH a pak must not be reduced to a config drop ---
     # config-ini's `unless` excludes archives carrying real payload; this asserts the

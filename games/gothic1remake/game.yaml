@@ -89,18 +89,38 @@ installers:
   #           └── UE4SS-settings.ini
   # The repack rule anchors at Win64 and uses `take: self` so the copy destinations
   # are just the files below Win64 while keeping the same UE4SS Injector mod type.
+  #
+  # NOTE on the `unless` below: unlike the other UE games, this rule EXISTS to handle
+  # game-relative archives (G1R/Binaries/Win64/…), so it must NOT decline them wholesale —
+  # that would break the Nexus repack it was written for. Its `take: self` install root is
+  # the Win64 folder, so it declines only when the archive ALSO carries payload outside
+  # Binaries/ (paks, or a native Mods/ tree), which stripPath would silently drop. Those
+  # archives fall through to `root` (16) / `content-folder` (17) and deploy intact.
+  # See halocampaignevolved mod 68 for the same bug caught in the wild.
   - id: ue4ss-injector-repack
     priority: 14
     when: { hasFile: "**/Win64/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    unless:
+      any:
+        - { hasFile: "**/Content/Paks/**" }
+        - { hasFile: "**/Mods/**" }
     anchor: "**/Win64/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}"
     take: self
     placeAt: "${ue4ssInjectorPath}"
     modType: gothic1remake-ue4ss-injector
 
   # Generic upstream UE4SS release: marker file parent is the install root.
+  # `unless` guards the same drop hazard as the repack rule above, but here the fix is the
+  # plain one used on the other UE games: `take: parent` resolves the install root to the
+  # marker's folder, so a game-relative tree loses everything outside it. Decline and let
+  # `root` (16) take it.
   - id: ue4ss-injector
     priority: 15
     when: { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    unless:
+      any:
+        - { hasFile: "G1R/**" }
+        - { hasFile: "Engine/**" }
     anchor: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}"
     take: parent
     placeAt: "${ue4ssInjectorPath}"
@@ -388,15 +408,25 @@ validators:
 
   - id: injector-validator
     name: Archives with injector markers should match ue4ss-injector
+    # Game-relative loader bundles are claimed by `root` by design (see installer 15), so
+    # they're excluded here.
     when:
       all:
         - { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
         - { not: { hasFile: "**/Win64/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" } }
+        - { not: { hasFile: "G1R/**" } }
+        - { not: { hasFile: "Engine/**" } }
     assert:
       matched: ue4ss-injector
 
   - id: injector-repack-validator
     name: Archives with game-relative injector markers should match ue4ss-injector-repack
-    when: { hasFile: "**/Win64/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    # Repack archives that also ship payload outside Binaries/ are claimed by `root` /
+    # `content-folder` by design (see installer 14), so they're excluded here.
+    when:
+      all:
+        - { hasFile: "**/Win64/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { not: { hasFile: "**/Content/Paks/**" } }
+        - { not: { hasFile: "**/Mods/**" } }
     assert:
       matched: ue4ss-injector-repack

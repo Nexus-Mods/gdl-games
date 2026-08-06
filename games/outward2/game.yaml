@@ -66,9 +66,20 @@ modTypes:
 
 installers:
   # --- Priority 15: UE4SS loader (dwmapi/xinput proxy or UE4SS-settings.ini) → Binaries ---
+  # The `unless` is load-bearing, not defensive. This rule's `take: parent` resolves the
+  # install root to otw2_ue/Binaries/<arch>, and stripPath drops every file outside that
+  # subtree (gdl/src/runtime/installer-engine.ts:101-151). So an archive laid out from the
+  # install root that ships the loader AND other payload (a pak under Content/Paks/, say)
+  # would lose everything outside Binaries/ — silently. Declining here hands it to `root`
+  # (16), which deploys the tree intact. Found on halocampaignevolved mod 68, where exactly
+  # this dropped a three-file pak triplet; latent here, so guarded before it bites.
   - id: ue4ss-injector
     priority: 15
     when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    unless:
+      any:
+        - { hasFile: "otw2_ue/**" }
+        - { hasFile: "Engine/**" }
     anchor: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}"
     take: parent
     placeAt: "${binariesPath}"
@@ -260,7 +271,13 @@ toolbarActions:
 validators:
   - id: injector-validator
     name: UE4SS loader archives (dwmapi/xinput/UE4SS-settings.ini) match ue4ss-injector
-    when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    # Game-relative loader bundles are claimed by `root` by design (see installer 15), so
+    # they're excluded here — pak-payload-placement covers their payload instead.
+    when:
+      all:
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "otw2_ue/**" }
+        - not: { hasFile: "Engine/**" }
     assert: { matched: ue4ss-injector }
 
   - id: reshade-validator
