@@ -548,6 +548,18 @@ validators:
 
   - id: injector-validator
     name: Archives with injector markers should match ue4ss-injector
-    when: { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    # Game-relative loader bundles are claimed by `root` (10) by design — it deliberately
+    # outranks the injector here so a whole-tree archive deploys intact instead of losing
+    # everything outside Binaries/. Mod 53 (SN2 Mod Loader) is exactly that shape: a
+    # dwmapi.dll under Subnautica2/Binaries/Win64/ plus docs and optional-mods/ at the
+    # archive root. Asserting `ue4ss-injector` for it was wrong, and this validator failed
+    # on it (pre-existing on main; surfaced once the corpus grew past the original 20
+    # archives). The other UE games reach the same end state via an `unless` on the
+    # injector; subnautica2 gets there by priority alone.
+    when:
+      all:
+        - { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { not: { hasFile: "Subnautica2/**" } }
+        - { not: { hasFile: "Engine/**" } }
     assert:
       matched: ue4ss-injector
