@@ -140,6 +140,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+          fetch-depth: 0   # changelog derivation needs full history + the per-game ledger tags
 
       - uses: pnpm/action-setup@v4
 
@@ -179,10 +180,27 @@ jobs:
           set -euo pipefail
           {
             echo "file_id=$(node ../../gdl/dist/cli.js publish-info file-group-id)"
+            echo "mod_id=$(node ../../gdl/dist/cli.js publish-info mod-id)"
             echo "display_name=$(node ../../gdl/dist/cli.js publish-info display-name)"
             echo "version=$(node ../../gdl/dist/cli.js publish-info version)"
             echo "zip_name=$(node ../../gdl/dist/cli.js publish-info zip-name)"
           } >> "$GITHUB_OUTPUT"
+
+      # Changelog text for the Nexus file page, derived from commit subjects since this game's
+      # previous ledger tag (see tools/changelog.mjs for why it's scoped to games/<id>).
+      # Runs before the GitHub-release step so this version's tag does not exist yet.
+      - name: Build changelog
+        id: changelog
+        run: |
+          set -euo pipefail
+          {
+            echo "text<<GDL_CHANGELOG_EOF"
+            node tools/changelog.mjs "${{ matrix.id }}"
+            echo
+            echo "GDL_CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "--- changelog for ${{ matrix.tag }} ---"
+          node tools/changelog.mjs "${{ matrix.id }}"
 
       - name: Create GitHub release (creates the ledger tag)
         uses: softprops/action-gh-release@v2
@@ -208,3 +226,6 @@ jobs:
           primary_mod_manager_download: true
           allow_mod_manager_download: true
           update_mod_version: true
+          # changelog requires mod_id to be set (upload-action input contract).
+          mod_id: ${{ steps.meta.outputs.mod_id }}
+          changelog: ${{ steps.changelog.outputs.text }}
