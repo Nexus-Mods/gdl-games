@@ -123,6 +123,24 @@ tag yet, it packages the extension, creates a GitHub release (the tag doubles as
 "already-published" ledger), and uploads to Nexus Mods. Games with an unchanged version are
 skipped. A placeholder guard refuses to publish any game whose `game.yaml` still contains stub ids.
 
+The Nexus file page's **changelog is generated, not hand-written**: `tools/changelog.mjs` takes the
+commit subjects since that game's previous ledger tag, scoped to `games/<id>/`, strips the
+conventional-commit prefix and drops housekeeping commits (`chore`/`docs`/`ci`/`test`, bare version
+bumps). A release whose commits are all housekeeping publishes a generic maintenance line rather
+than an empty changelog.
+
+Two consequences worth knowing when you write a commit that touches a game:
+
+- **Your commit subject becomes public text** on the mod's file page, so write it for a mod user
+  (`fix(solarpunk): add xboxLauncher so Game Pass copies can launch` → "Add xboxLauncher so Game
+  Pass copies can launch"). Correcting it after the fact needs another version bump.
+- A commit that touches several games (`fix(a,b): …`) appears on **both** games' pages, which is
+  usually what you want. Preview what a release would say with:
+
+```bash
+node tools/changelog.mjs <game-id>
+```
+
 > **Once a game has shipped, some `game.yaml` edits break existing users' installed mods** —
 > renaming or removing a `modType` id orphans them, and changing an installer means a mod must be
 > reinstalled to pick up the new routing. Nothing in the build, tests or corpus catches this. See
