@@ -1,5 +1,5 @@
 gdl: 1
-version: 1.2.0   # extension version — drives info.json, the release tag, and the zip name
+version: 1.2.1   # extension version — drives info.json, the release tag, and the zip name
 
 # Halo: Campaign Evolved (Halo Studios / Xbox Game Studios) — Unreal Engine 5.
 # The studio's first UE5 title (replacing Slipspace); UE project folder is `Meteorite`,
