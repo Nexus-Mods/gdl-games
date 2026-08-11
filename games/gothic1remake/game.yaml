@@ -63,6 +63,13 @@ modTypes:
     name: "Content folder"
     path: "${gamePath}"
 
+  # Loose DLL plugins (upscalers, ReShade addons) live next to the shipping exe —
+  # the same physical folder as the UE4SS loader, but a distinct id so the UI and
+  # any future path split stay honest. Gothic is Steam-only, so no ${arch} branch.
+  - id: gothic1remake-binaries
+    name: "Binaries (DLL plugins)"
+    path: "${ue4ssInjectorPath}"
+
 installers:
   # --- Native Gothic Mods (GothicMod.json manifest) ---
   - id: native-gothic-mod
@@ -135,6 +142,59 @@ installers:
     take: parent.parent
     placeAt: "${ue4ssModsPath}"
     modType: gothic1remake-ue4ss
+
+  # --- Priority 23: UE4SS mod with enabled.txt but no Scripts/*.lua → ue4ss/Mods ---
+  # UE4SS *C++* mods: a compiled dlls/main.dll plus enabled.txt instead of Lua.
+  #   SuperArmorOverlay/{README.txt, dlls/main.dll, enabled.txt}       (mod 271)
+  #   ArcholosPotionSystem/{dlls/main.dll, enabled.txt, *.ini}         (mod 503)
+  # Also mods 370 and 541. These matched NO installer and installed zero files —
+  # the gap a third-party hotfix (nexusmods.com/site/mods/2161) patched into our
+  # published index.js by hand. `take: parent.parent` keeps the named mod folder so
+  # dlls/ survives as a subfolder, which is where UE4SS loads main.dll from.
+  #
+  # The `unless` on loader markers keeps UE4SS's own release on ue4ss-injector: it
+  # ships sample mods under ue4ss/Mods/ that carry enabled.txt, which this rule
+  # would otherwise claim — stripping the loader DLL in the process (verified).
+  - id: ue4ss-lua-enabled
+    priority: 23
+    when: { hasFile: "**/enabled.txt" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/enabled.txt"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: gothic1remake-ue4ss
+
+  # --- Priority 27: Loose native DLL plugin → Binaries/Win64 ---
+  # DLLs that go next to the shipping exe, previously unmatched:
+  #   amd_fidelityfx_upscaler_dx12.dll + amdxcffx64.dll   (mod 104, OptiScaler)
+  #   fyryNy_itemlocator.dll + .ini                       (mod 25)
+  #   Gothic1RemakeCore.dll + .addon64                    (mod 36, ReShade addon)
+  # Also mods 24, 34, 169. Two Gothic-specific `unless` arms vs the solarpunk
+  # template, both deliberate: `**/GothicMod.json` because Gothic is the only game
+  # with a native-gothic-mod rule (10) to protect, and `**/enabled.txt` so a UE4SS
+  # C++ mod stays with ue4ss-lua-enabled (23) rather than having its dlls/main.dll
+  # flattened next to the exe.
+  - id: native-dll
+    priority: 27
+    when: { hasFile: "**/*.dll" }
+    unless:
+      any:
+        - { hasFile: "**/{dwmapi.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/ue4ss/**" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/GothicMod.json" }
+        - { hasFile: "**/G1R/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/*.dll"
+    take: parent
+    placeAt: "${ue4ssInjectorPath}"
+    modType: gothic1remake-binaries
 
   # --- Priority 16: Root (game-relative archives laid out from the install root) ---
   # Positioned AFTER the injector installers (so the Nexus UE4SS repack keeps its
@@ -214,10 +274,31 @@ installers:
         - { hasFile: "**/Engine/**" }
         - { hasFile: "**/Binaries/**" }
         - { hasFile: "**/GothicMod.json" }
+        # Chromium/Electron apps bundle dozens of resource .pak files that are NOT
+        # UE paks. Mod 98 (Witcher Remapper) is an Electron tool — 58 locales/*.pak
+        # plus an .exe — and this rule was dumping all 109 files, executable
+        # included, into ~mods. Its own page says "Extract → Run the .exe", so it is
+        # a standalone tool with no install location under the game: leaving it
+        # unmatched is the correct outcome, not a coverage gap. These three markers
+        # appear in every Electron bundle and in no UE pak mod in the corpus.
+        - { hasFile: "**/locales/*.pak" }
+        - { hasFile: "**/resources.pak" }
+        - { hasFile: "**/*.exe" }
     anchor: "**/*.pak"
     take: parent
     placeAt: "${pakModsPath}"
     modType: gothic1remake-pak
+
+  # --- Claim (B) of the mods/2161 hotfix, deliberately NOT implemented ---
+  # It also "changes install rule for pak mods to preserve parent folders inside
+  # Content/Paks/~mods". Not reproducible: across 366 cached Gothic archives there
+  # are zero destination collisions and every pak mod routes correctly. `take:
+  # parent` is anchor-depth-relative (see stripPath in
+  # gdl/src/runtime/installer-engine.ts), NOT "always strip one segment" — the one
+  # archive with paks in two subfolders keeps its structure already. Their patch
+  # synthesises a folder name from the pak basename, which `take:` cannot and
+  # should not express, and UE loads paks recursively under ~mods anyway. Don't
+  # re-litigate without a failing archive.
 
 discovery:
   version:
@@ -343,6 +424,55 @@ tests:
           - ${ue4ssModsPath}/MyMod/enabled.txt
 
     # --- Root ---
+    # --- UE4SS C++ mod: compiled dll + enabled.txt, no Lua (mods 271, 370, 503, 541) ---
+    # The gap the mods/2161 hotfix patched by hand. `take: parent.parent` must keep the
+    # mod folder so dlls/ survives — UE4SS loads Mods/<Name>/dlls/main.dll from there.
+    - name: "ue4ss-lua-enabled: C++ mod with dlls/main.dll + enabled.txt (mod 271)"
+      archive:
+        - SuperArmorOverlay/README.txt
+        - SuperArmorOverlay/dlls/main.dll
+        - SuperArmorOverlay/enabled.txt
+      expect:
+        matched: ue4ss-lua-enabled
+        modType: gothic1remake-ue4ss
+        plan:
+          - ${ue4ssModsPath}/SuperArmorOverlay/README.txt
+          - ${ue4ssModsPath}/SuperArmorOverlay/dlls/main.dll
+          - ${ue4ssModsPath}/SuperArmorOverlay/enabled.txt
+
+    # Guard: the UE4SS release itself ships sample mods carrying enabled.txt, which
+    # ue4ss-lua-enabled (23) would otherwise claim — stripping the loader DLL (mod 86).
+    - name: "ue4ss-injector still wins over ue4ss-lua-enabled for the loader (mod 86)"
+      archive:
+        - dwmapi.dll
+        - ue4ss/UE4SS-settings.ini
+        - ue4ss/Mods/BPModLoaderMod/Scripts/main.lua
+        - ue4ss/Mods/SomeMod/enabled.txt
+      expect:
+        matched: ue4ss-injector
+        modType: gothic1remake-ue4ss-injector
+
+    # --- Loose native DLLs next to the shipping exe (mods 24, 25, 34, 36, 104, 169) ---
+    - name: "native-dll: loose upscaler DLLs at archive root (mod 104)"
+      archive:
+        - amd_fidelityfx_upscaler_dx12.dll
+        - amdxcffx64.dll
+      expect:
+        matched: native-dll
+        modType: gothic1remake-binaries
+        plan:
+          - ${ue4ssInjectorPath}/amd_fidelityfx_upscaler_dx12.dll
+          - ${ue4ssInjectorPath}/amdxcffx64.dll
+
+    # Guard: a native Gothic mod bundling a DLL keeps its p10 routing, not native-dll.
+    - name: "native-gothic-mod wins over native-dll"
+      archive:
+        - MyMod/GothicMod.json
+        - MyMod/Binaries/plugin.dll
+      expect:
+        matched: native-gothic-mod
+        modType: gothic1remake-nativemod
+
     # --- Wrapped game-relative tree: mods 13, 63, 367, 392, 447, 508, 523, 538 ---
     # `root` (16) anchors its `when` at the archive root, so an author who wrapped the
     # tree in a folder (usually the mod name, sometimes a variant label like `violet/`
@@ -495,3 +625,31 @@ validators:
         - { not: { hasFile: "**/Mods/**" } }
     assert:
       matched: ue4ss-injector-repack
+
+  # Placement guard, ported from solarpunk — gothic shipped without it. This is the
+  # validator that catches DROPPED payload, not just misplaced payload: the runner
+  # fails when no planned file matches `files` at all (validator-runner.ts), which is
+  # exactly how halocampaignevolved caught its injector-vs-root ordering bug. Electron
+  # resource paks are excluded because `pak` deliberately declines them (installer 30).
+  - id: pak-payload-placement
+    name: .pak/.ucas/.utoc install under Content/Paks, never at the game root
+    when:
+      all:
+        - { hasFile: "**/*.{pak,ucas,utoc}" }
+        - { not: { hasFile: "**/locales/*.pak" } }
+        - { not: { hasFile: "**/resources.pak" } }
+        # KNOWN-UNFIXABLE, excluded so the guard stays green for everything it can
+        # actually police. Mods 76 and 355 are genuinely MIXED at the archive root: a
+        # UE4SS Lua mod folder next to loose pak sets. ue4ss-lua (22) claims the
+        # archive and carries the paks into ue4ss/Mods, where UE never reads them.
+        # Vortex allows exactly ONE modType per mod (`setmodtype` is a single scalar
+        # assignment), and the DSL maps one install root to one destination, so no
+        # rule here can split the archive. Fixing it needs multi-destination support
+        # in gdl/ — a separate repo (CLAUDE.md rule 3). Same class as
+        # halocampaignevolved mod 73. Remove this arm when that lands.
+        - { not: { hasFile: "**/Scripts/*.lua" } }
+    assert:
+      placement:
+        - files: "**/*.{pak,ucas,utoc}"
+          mustMatch: "**/Content/Paks/**"
+          mustNotMatch: "${installPath}/*"
