@@ -166,6 +166,35 @@ installers:
     placeAt: "${installPath}"
     modType: subnautica2-root
 
+  # --- Priority 10.5: the same game-relative tree, wrapped in a folder ---
+  # `root` (10) anchors its `when` at the archive root, so an author who wraps the
+  # tree in a folder matched NOTHING and the mod installed zero files, silently
+  # (mod 364). `copy: {stripCommonRoot: true}` strips a single shared wrapper while
+  # keeping files outside the game tree (a wrapped README), which a `**/Subnautica2/`
+  # anchor with `take: self` would drop — and unlike a single anchor it spans both
+  # Subnautica2/ and Engine/ instead of keeping one and dropping the other.
+  #
+  # It also self-guards the multi-variant case, which this game actually has: mod 348
+  # ships Cyclops/ + Prawnsuit/ + Seamoth/, each a full tree with IDENTICAL leaf
+  # filenames, plus an instructions file. There is no single common root, so nothing
+  # is stripped and all three deploy verbatim as folders the game ignores, next to the
+  # author's instructions. Stripping each wrapper instead would map all three variants
+  # onto the SAME destinations — three copies fighting over one path, resolved by write
+  # order, giving the user a silently arbitrary variant. Inert and visible beats that.
+  # The DSL cannot count sibling directories (every predicate is a boolean over
+  # `matchAny`), so this is the only available guard — and it is the right outcome.
+  - id: wrapped-root
+    priority: 10.5
+    when:
+      all:
+        - any:
+            - { hasFile: "**/Subnautica2/**" }
+            - { hasFile: "**/Engine/**" }
+        - not: { hasFile: "Subnautica2/**" }
+        - not: { hasFile: "Engine/**" }
+    copy: { stripCommonRoot: true }
+    modType: subnautica2-root
+
   # --- Priority 11: Content folder (project-relative trees: Content/, Config/, Binaries/) ---
   # Sibling of `root` for archives laid out from the game PROJECT folder rather
   # than the install root. Whole tree deploys to ${gamePath} (= installPath/Subnautica2
@@ -315,6 +344,44 @@ tests:
         plan:
           - ${ue4ssModsPath}/MyMod/Scripts/main.lua
           - ${ue4ssModsPath}/MyMod/enabled.txt
+
+    # --- Wrapped game-relative tree: mod 364 (SubMod) ---
+    # This is a MIXED mod inside a wrapper: lua under Binaries/ plus a pak triplet
+    # under Content/Paks/~mods/. `ue4ss-lua` used to claim it and kept only 25 of its
+    # 30 files, dropping the entire pak triplet. `wrapped-root` (10.5) strips the one
+    # shared wrapper and installs everything, paks included.
+    - name: "wrapped-root: wrapped mixed lua+pak mod keeps its paks (mod 364)"
+      archive:
+        - SubMod/README.txt
+        - SubMod/Subnautica2/Binaries/Win64/ue4ss/Mods/SubnauticaCheats/Scripts/main.lua
+        - SubMod/Subnautica2/Content/Paks/~mods/SubModBiomods_P.pak
+      expect:
+        matched: wrapped-root
+        modType: subnautica2-root
+        plan:
+          - README.txt
+          - Subnautica2/Binaries/Win64/ue4ss/Mods/SubnauticaCheats/Scripts/main.lua
+          - Subnautica2/Content/Paks/~mods/SubModBiomods_P.pak
+
+    # --- Multi-variant guard: mod 348 (vehicle sound variants) ---
+    # Three sibling wrappers, each a full tree with IDENTICAL leaf filenames, plus the
+    # author's instructions. There is no single common root, so `stripCommonRoot` strips
+    # NOTHING and the variants deploy verbatim as folders the game ignores. That is the
+    # intended outcome: stripping each wrapper would map all three onto the same
+    # destinations, and the user would silently get whichever won the write race.
+    # The DSL cannot count sibling directories, so this self-guard is what we rely on.
+    - name: "wrapped-root: multi-variant archive is NOT collapsed (mod 348)"
+      archive:
+        - Cyclops/Subnautica2/Content/FMOD/Desktop/tadpole.bank
+        - Prawnsuit/Subnautica2/Content/FMOD/Desktop/tadpole.bank
+        - Installation instructions.txt
+      expect:
+        matched: wrapped-root
+        modType: subnautica2-root
+        plan:
+          - Cyclops/Subnautica2/Content/FMOD/Desktop/tadpole.bank
+          - Prawnsuit/Subnautica2/Content/FMOD/Desktop/tadpole.bank
+          - Installation instructions.txt
 
     # A game-relative UE4SS lua mod (laid out from the install root) now deploys
     # as an intact tree via `root`. The files land at the SAME physical location
@@ -543,6 +610,13 @@ validators:
         - not: { hasFile: "Engine/**" }
         - not: { hasFile: "Content/**" }
         - not: { hasFile: "Binaries/**" }
+        # ...and so are WRAPPED game-relative archives, via `wrapped-root` (10.5).
+        # Mod 364 is the case: SubMod/Subnautica2/{Binaries/...Scripts/*.lua +
+        # Content/Paks/~mods/*.pak}. This validator used to assert `ue4ss-lua` for it,
+        # which encoded a bug — that installer's `take: parent.parent` kept only 25 of
+        # 30 files and dropped the whole pak triplet. `wrapped-root` installs all 30
+        # with the paks under Content/Paks/~mods.
+        - not: { hasFile: "**/Subnautica2/**" }
     assert:
       matched: ue4ss-lua
 

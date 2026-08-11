@@ -268,6 +268,40 @@ installers:
     placeAt: "${installPath}"
     modType: hce-root
 
+  # --- Priority 16.5: the same game-relative tree, wrapped in a folder ---
+  # `root` (16) anchors its `when` at the archive root, so an author who wraps the
+  # tree in a folder — usually the mod's own name, sometimes a variant label —
+  # matched NOTHING and the mod installed zero files, silently:
+  #   PewPewMagnums/Meteorite/Content/Paks/~mods/PewPewMagnums.pak   (mod 102)
+  #   Halo 2A/Meteorite/Content/Splash/Splash.bmp                    (mod 146)
+  # Affected mods 102, 126, 146, 147, 169, 202 here.
+  #
+  # `copy: {stripCommonRoot: true}` is deliberate, not interchangeable with a
+  # directory anchor. Two properties matter:
+  #   - It keeps files that sit OUTSIDE the game tree (a wrapped README), which a
+  #     `**/Meteorite/` anchor with `take: self` would silently drop.
+  #   - A single anchor cannot span both Meteorite/ and Engine/ — it keeps one and
+  #     drops the other — whereas the whole-archive copy keeps both.
+  # It also self-guards multi-variant archives (several sibling wrappers each
+  # holding a full tree, e.g. Cyclops/ + Prawnsuit/ + Seamoth/): with no single
+  # common root there is nothing to strip, so the variants deploy verbatim as
+  # folders the game ignores, alongside the author's instructions file. Inert and
+  # visible beats collapsing three variants onto one set of destinations, which is
+  # what stripping each wrapper would do. The DSL cannot count sibling directories
+  # (every predicate is a boolean over `matchAny`), so this is the only available
+  # guard — and it is the right outcome anyway.
+  - id: wrapped-root
+    priority: 16.5
+    when:
+      all:
+        - any:
+            - { hasFile: "**/Meteorite/**" }
+            - { hasFile: "**/Engine/**" }
+        - not: { hasFile: "Meteorite/**" }
+        - not: { hasFile: "Engine/**" }
+    copy: { stripCommonRoot: true }
+    modType: hce-root
+
   # --- Priority 17: Content folder (project-relative trees: Content/, Config/, Binaries/) ---
   # Sibling of `root` for archives laid out from the project folder rather than
   # the install root. Whole tree deploys to ${gamePath}, so a bare Binaries/ tree
@@ -620,6 +654,34 @@ tests:
           - ${menuMoviePath}/FMS_MainMenuBackground.mp4
 
     # --- Game-relative tree: mod 6 "No-Intro-Splash", mod 34 "Recoded Movies" ---
+    # --- Wrapped game-relative tree: mods 102, 126, 146, 147, 169, 202, 214 ---
+    # `root` (16) anchors its `when` at the archive root, so these matched nothing
+    # and installed ZERO files. `wrapped-root` (16.5) strips the single shared
+    # wrapper. The README outside the game tree must survive — that's why the rule
+    # is a whole-archive copy rather than a `**/Meteorite/` anchor.
+    - name: "wrapped-root: wrapper folder stripped, README kept (mods 102, 202)"
+      archive:
+        - EnhancedViewModels HCEV/Meteorite/Content/Paks/~mods/EnhancedViewModels_P.pak
+        - EnhancedViewModels HCEV/Meteorite/Content/Paks/~mods/EnhancedViewModels_P.utoc
+        - EnhancedViewModels HCEV/ReadMe.txt
+      expect:
+        matched: wrapped-root
+        modType: hce-root
+        plan:
+          - Meteorite/Content/Paks/~mods/EnhancedViewModels_P.pak
+          - Meteorite/Content/Paks/~mods/EnhancedViewModels_P.utoc
+          - ReadMe.txt
+
+    # A tree already at the archive root must stay with `root` (16) — wrapped-root
+    # must not steal it, or `stripCommonRoot` would eat the Meteorite/ segment itself.
+    - name: "root still wins for an unwrapped tree (wrapped-root declines)"
+      archive:
+        - Meteorite/Content/Movies/LogoParade.mp4
+        - ReadMe.txt
+      expect:
+        matched: root
+        modType: hce-root
+
     - name: "root: Meteorite/-relative tree deploys intact (mods 6, 34)"
       archive:
         - Meteorite/Content/Movies/LogoParade.mp4
