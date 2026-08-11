@@ -153,6 +153,40 @@ installers:
     placeAt: "${installPath}"
     modType: gothic1remake-root
 
+  # --- Priority 16.5: the same game-relative tree, wrapped in a folder ---
+  # `root` (16) anchors its `when` at the archive root, so an author who wraps the
+  # tree in a folder — usually the mod's own name, sometimes a variant label —
+  # matched NOTHING and the mod installed zero files, silently:
+  #   violet/G1R/Content/Paks/G1R_BlueScavengerMount_P.pak     (mod 508)
+  #   Classic/G1R/Content/Movies/G1R_Intro.bk2                 (mod 367)
+  #   G1RMeshProject/G1R/...                                   (mod 447, 2124 files)
+  # Affected mods 367, 392, 447, 508, 523.
+  #
+  # `copy: {stripCommonRoot: true}` is deliberate, not interchangeable with a
+  # directory anchor. Two properties matter:
+  #   - It keeps files that sit OUTSIDE the game tree (a wrapped README), which a
+  #     `**/G1R/` anchor with `take: self` would silently drop.
+  #   - A single anchor cannot span both G1R/ and Engine/ — it keeps one and drops
+  #     the other, which would break the shipped `root: G1R + Engine segments`
+  #     case — whereas the whole-archive copy keeps both.
+  # It also self-guards multi-variant archives (several sibling wrappers each
+  # holding a full tree): with no single common root there is nothing to strip, so
+  # the variants deploy verbatim as folders the game ignores rather than collapsing
+  # onto one set of destinations. The DSL cannot count sibling directories (every
+  # predicate is a boolean over `matchAny`), so this is the only available guard —
+  # and it is the right outcome anyway.
+  - id: wrapped-root
+    priority: 16.5
+    when:
+      all:
+        - any:
+            - { hasFile: "**/G1R/**" }
+            - { hasFile: "**/Engine/**" }
+        - not: { hasFile: "G1R/**" }
+        - not: { hasFile: "Engine/**" }
+    copy: { stripCommonRoot: true }
+    modType: gothic1remake-root
+
   # --- Priority 17: Content folder (project-relative trees: Content/, Config/, Binaries/) ---
   # Sibling of `root` for archives laid out from the project folder rather than the
   # install root. Whole tree deploys to ${gamePath} (= installPath/G1R), so a bare
@@ -309,6 +343,37 @@ tests:
           - ${ue4ssModsPath}/MyMod/enabled.txt
 
     # --- Root ---
+    # --- Wrapped game-relative tree: mods 13, 63, 367, 392, 447, 508, 523, 538 ---
+    # `root` (16) anchors its `when` at the archive root, so an author who wrapped the
+    # tree in a folder (usually the mod name, sometimes a variant label like `violet/`
+    # or `Classic/`) matched nothing and the mod installed ZERO files. `wrapped-root`
+    # (16.5) strips the single shared wrapper; the README outside the game tree
+    # survives, which a `**/G1R/` anchor with `take: self` would have dropped.
+    - name: "wrapped-root: wrapper folder stripped, README kept (mods 13, 63, 508)"
+      archive:
+        - Gothic 1 Remake/G1R/Content/Paks/G1R-Windows_P.pak
+        - Gothic 1 Remake/G1R/Story/Cache/AlkimiaLocalization_00000000.lcache
+        - Gothic 1 Remake/00_README_INSTALLATION.txt
+      expect:
+        matched: wrapped-root
+        modType: gothic1remake-root
+        plan:
+          - G1R/Content/Paks/G1R-Windows_P.pak
+          - G1R/Story/Cache/AlkimiaLocalization_00000000.lcache
+          - 00_README_INSTALLATION.txt
+
+    # A tree already at the archive root must stay with `root` (16) — otherwise
+    # `stripCommonRoot` would eat the G1R/ segment itself. This is also why a single
+    # directory anchor was rejected: it cannot span both G1R/ and Engine/ (see the
+    # `root: G1R + Engine segments` case below, which it would have broken).
+    - name: "root still wins for an unwrapped tree (wrapped-root declines)"
+      archive:
+        - G1R/Content/Paks/foo.pak
+        - ReadMe.txt
+      expect:
+        matched: root
+        modType: gothic1remake-root
+
     - name: "root: G1R + Engine segments"
       archive:
         - G1R/Content/Paks/foo.pak
