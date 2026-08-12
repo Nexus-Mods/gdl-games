@@ -1,5 +1,5 @@
 gdl: 1
-version: 2.1.0   # extension version — drives info.json, the release tag, and the zip name
+version: 2.2.0   # extension version — drives info.json, the release tag, and the zip name
 
 # Gothic 1 Remake (Alkimia Interactive) — Unreal Engine 5. Project folder: G1R.
 # Supports: pak mods (Content/Paks/~mods), UE4SS (loader + Lua mods), native Gothic mods,
