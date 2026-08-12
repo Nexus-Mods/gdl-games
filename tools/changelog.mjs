@@ -36,16 +36,23 @@ const FALLBACK = 'Maintenance release — no user-facing changes.';
 /**
  * Conventional-commit types that describe repo upkeep rather than anything a mod user would
  * notice. `chore` covers the bare "bump version to x.y.z" commits that would otherwise
- * produce a changelog restating the version number the page already shows.
+ * produce a changelog restating the version number the page already shows; `release` covers
+ * the version-bump commit that TRIGGERS the release, which published "- Bump to 2.2.0" as
+ * the first entry of gothic1remake 2.2.0 before it was added here.
  */
-const NOISE_TYPES = new Set(['chore', 'docs', 'ci', 'test', 'build', 'style', 'refactor']);
+const NOISE_TYPES = new Set([
+  'chore', 'docs', 'ci', 'test', 'build', 'style', 'refactor', 'release',
+]);
 
 /**
  * Subjects that carry no useful information for a reader even though they aren't
- * conventional-commit shaped. Matched case-insensitively against the whole subject.
+ * conventional-commit shaped. Matched case-insensitively against the whole subject, AFTER
+ * the conventional-commit prefix is stripped — `release(x): bump to 2.2.0` reduces to
+ * `bump to 2.2.0`, which is why the version pattern can't require the word "version".
  */
 const NOISE_SUBJECTS = [
   /^update\s+mod\s*id$/i,
+  /^bump(\s+\w+)?\s+to\s+v?\d/i,
   /^bump\s+version/i,
   /^wip\b/i,
   /^merge\b/i,
@@ -98,9 +105,12 @@ const stripBump = (text) =>
   text.replace(/[;,]\s*bump(?:\s+\w+)?\s+to\s+v?\d+[\w.\-]*\s*$/i, '').trim();
 
 const isNoise = (subject) => {
-  if (NOISE_SUBJECTS.some((re) => re.test(subject.trim()))) return true;
   const match = /^([a-z]+)(\([^)]*\))?!?:/i.exec(subject);
-  return match ? NOISE_TYPES.has(match[1].toLowerCase()) : false;
+  if (match && NOISE_TYPES.has(match[1].toLowerCase())) return true;
+  // Test both the raw subject and the prefix-stripped form: `release(x): bump to 2.2.0`
+  // only looks like noise once `release(x): ` is gone.
+  const bare = stripPrefix(subject).trim();
+  return NOISE_SUBJECTS.some((re) => re.test(subject.trim()) || re.test(bare));
 };
 
 /** Uppercase the first letter so stripped subjects read as sentences. */
@@ -117,7 +127,10 @@ export const buildChangelog = (subjects) => {
     const key = cleaned.toLowerCase();
     if (seen.has(key)) continue;   // same fix cherry-picked / re-landed
     seen.add(key);
-    lines.push(`- ${cleaned}`);
+    // No "- " prefix: the Nexus file page renders each LINE as its own changelog entry and
+    // supplies its own "Version x.y.z" heading, so a leading dash showed up as literal text
+    // ("- Install …") on gothic1remake 2.2.0. One change per line, nothing else.
+    lines.push(cleaned);
   }
   return lines.length ? lines.join('\n') : FALLBACK;
 };

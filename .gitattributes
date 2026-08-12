@@ -1,0 +1,8 @@
+# Keep tools/ JavaScript checked out with LF on every platform.
+#
+# vitest's transform cannot parse a CRLF .mjs: it fails with
+# "SyntaxError: Invalid or unexpected token" and reports the SUITE as failing with
+# "no tests", which reads like a broken test rather than a line-ending problem.
+# With core.autocrlf=true (the Windows default) git converts on checkout, so the
+# tools/changelog.test.mjs suite silently stopped running twice before this was pinned.
+*.mjs text eol=lf
