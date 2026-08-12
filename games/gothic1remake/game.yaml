@@ -1,5 +1,5 @@
 gdl: 1
-version: 2.1.0   # extension version — drives info.json, the release tag, and the zip name
+version: 2.2.0   # extension version — drives info.json, the release tag, and the zip name
 
 # Gothic 1 Remake (Alkimia Interactive) — Unreal Engine 5. Project folder: G1R.
 # Supports: pak mods (Content/Paks/~mods), UE4SS (loader + Lua mods), native Gothic mods,
@@ -42,8 +42,9 @@ context:
   # the UE *target platform* name and varies per game/build (Windows /
   # WindowsClient / WindowsNoEditor) — never copy another game's, and a wrong value
   # builds, tests and corpuses green while deploying into a folder the game ignores.
-  # Verified from the install instructions of mods 68, 70, 71, 83 and 95, which
-  # independently all document %LOCALAPPDATA%\G1R\Saved\Config\Windows.
+  # CONFIRMED on a real install (2026-08-12): %LOCALAPPDATA%\G1R\Saved\Config\Windows
+  # exists and holds GameUserSettings.ini. Corroborated by the install instructions of
+  # mods 68, 70, 71, 83 and 95, which independently all document the same path.
   configPath: ${appDataLocal}/G1R/Saved/Config/Windows
 
 modTypes:
