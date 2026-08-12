@@ -202,6 +202,29 @@ jobs:
           echo "--- changelog for ${{ matrix.tag }} ---"
           node tools/changelog.mjs "${{ matrix.id }}"
 
+      # The changelog endpoint keys on the mod UID, not the scoped id in the mod page URL
+      # (which 404s as "Mod not found: <scoped id>"). Derived from modId so the two can't
+      # drift. Non-fatal: on failure the file still publishes, just without a changelog.
+      - name: Resolve mod UID for the changelog endpoint
+        id: uid
+        env:
+          NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
+        run: |
+          set -uo pipefail
+          scoped='${{ steps.meta.outputs.mod_id }}'
+          uid=$(curl -sS --max-time 30 \
+                  -H "apikey: $NEXUS_API_KEY" \
+                  -H 'Application-Name: gdl-games' \
+                  -H 'Application-Version: 1.0' \
+                  "https://api.nexusmods.com/v3/games/site/mods/${scoped}" \
+                | jq -r '.data.id // empty')
+          if [ -z "$uid" ]; then
+            echo "::warning::could not resolve mod UID for scoped id ${scoped}; publishing without a changelog"
+          else
+            echo "resolved scoped id ${scoped} -> uid ${uid}"
+          fi
+          echo "mod_uid=${uid}" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub release (creates the ledger tag)
         uses: softprops/action-gh-release@v2
         with:
@@ -226,6 +249,7 @@ jobs:
           primary_mod_manager_download: true
           allow_mod_manager_download: true
           update_mod_version: true
-          # changelog requires mod_id to be set (upload-action input contract).
-          mod_id: ${{ steps.meta.outputs.mod_id }}
+          # The mod UID, not the scoped id (see the resolve step above). Serves only the
+          # changelog — the file upload keys on file_id.
+          mod_id: ${{ steps.uid.outputs.mod_uid }}
           changelog: ${{ steps.changelog.outputs.text }}
