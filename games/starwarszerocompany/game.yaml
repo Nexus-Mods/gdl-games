@@ -21,8 +21,8 @@ version: 1.0.0   # extension version — drives info.json, the release tag, and 
 # A wrong path here breaks every modType destination while the build, unit tests and
 # audit-docs all stay green — only the corpus or a real install catches it. Two earlier
 # guesses at the project folder were both wrong (a Steam dev-branch codename `Bruno`, and
-# `ProjectBruno` from a published mod's archive), so: don't take the project folder from a
-# beta-branch launch path or a mod archive. See references/research-recipes.md §2.
+# `ProjectBruno` from the first mod upload, since fixed by its author), so: don't take the
+# project folder from a beta-branch launch path or a mod archive. Recipe §2.
 #
 # MOD SUPPORT CAVEAT: Bit Reactor Lead Producer Caydence Funk, on EA's own site
 # (ea.com/games/starwars/zero-company/news/answering-biggest-questions): "We have a lot
@@ -410,17 +410,20 @@ nexus:
   displayName: "Star Wars Zero Company Support for Vortex"
 
 # ---------------------------------------------------------------------------------------
-# CORPUS STATE: 0 usable mods, so the installer ladder below is UNPROVEN against real
-# mods for this game (its destinations are install-verified; its routing is not).
+# CORPUS STATE: 1/1 mods covered (2026-08-27, verified by running it).
+# The only published mod is mod 1 "Skip Bitreactor Startup Intro". Its FIRST upload was
+# mispathed (a `ProjectBruno/` tree and a movie filename absent from the game) and matched
+# nothing; the author reuploaded as file 2 the same day with a correct `SWZeroCompany/`
+# tree, and it now routes through `root` — all nine files overwrite movies that really
+# ship. Its shape is promoted into tests.cases. Kept as a note because the lesson stands:
+# a published archive is not evidence of game layout, and an unmatched mod may be the
+# MOD's bug rather than a gap in these rules.
 #
-# One mod is published (mod 1) and it is broken at source: it ships
-# `ProjectBruno/Content/Movies/Default_Startup.mp4`, and neither that project folder nor
-# that filename exists in the shipping game. It correctly matches no installer, and must
-# stay that way — a `ProjectBruno/` guard would bake a dead codename into a published
-# game.yaml (permanent, CLAUDE.md rule 6), and a `Content/Movies/**` catch-all would
-# silently rewrite any wrapper folder. This is an intentional non-match of the kind
-# docs/corpus-manifests.md describes, not a coverage gap. Next real signal: mods 2-7
-# (currently not_published) going live.
+# One mod exercises only `root`. The rest of the ladder — pak, pak-iostore, pak-alt,
+# logicmods, the three ue4ss-lua variants, ue4ss-injector, reshade, native-dll, config-ini
+# — is still UNPROVEN against real mods for this game; those cases remain synthetic shapes
+# borrowed from other UE5 titles. Validators report "0 total" for the same reason: none of
+# them match a `root` media replacement.
 #
 # Running it — `--fetch` alone is NOT enough. It resolves the domain but 404s on
 # UUID-style file uris (the Nexus manifest outage, docs/corpus-manifests.md), then prints
@@ -429,7 +432,8 @@ nexus:
 #       --all --out games/starwarszerocompany/tests/cache
 #     pnpm nx run starwarszerocompany:test-corpus
 # Reconcile the summary's `T total` against the v1 `mods` count before believing it. The
-# cache is gitignored, so re-run both after any installer change.
+# cache is gitignored and keyed by file id, so clear it before re-listing after a mod
+# updates — a stale entry routes the OLD archive and looks fine.
 # ---------------------------------------------------------------------------------------
 
 # Corpus validators: checked against real Nexus archives by the corpus run. None fire yet
@@ -509,18 +513,36 @@ tests:
   # (halocampaignevolved, outward2, solarpunk), since no working mod exists for this game
   # yet. They verify rule WIRING: priority ordering, unless-guards, path flattening.
   cases:
-    # Media replacement — the category the first published mod attempted (and got wrong;
-    # see the corpus-state note). Uses a movie filename that really does ship. Worth
-    # keeping in mind that the first mod for this game was media, not a pak: don't assume
-    # the pak-heavy ladder below is what this community will actually ship.
-    - name: "root: correctly-pathed startup-movie replacement deploys verbatim"
+    # REAL SHAPE — Nexus mod 1 "Skip Bitreactor Startup Intro", file 2 (v2, 2026-08-27).
+    # Verbatim archive listing from the corpus. A startup-movie replacement: all nine files
+    # overwrite movies that really ship in Content/Movies (each checked against the install),
+    # and the game-relative tree means `root` (16) deploys them intact.
+    # Note for later: the first mod for this game is media, not a pak — don't assume the
+    # pak-heavy ladder below is what this community will mostly ship.
+    - name: "root: real mod 1 v2 — startup-movie replacement deploys verbatim"
       archive:
+        - SWZeroCompany/Content/Movies/Logo_Startup_1080.bk2
         - SWZeroCompany/Content/Movies/Logo_Startup_1080.mp4
+        - SWZeroCompany/Content/Movies/Logo_Startup_1080_reprocessed.bk2
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_EA_LFG_1080x1920.bk2
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_EA_LFG_1080x1920.mp4
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080.bk2
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080.mp4
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080_v2.bk2
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080_v2.mp4
       expect:
         matched: root
         modType: swzc-root
         plan:
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_1080.bk2
           - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_1080.mp4
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_1080_reprocessed.bk2
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_EA_LFG_1080x1920.bk2
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_EA_LFG_1080x1920.mp4
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080.bk2
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080.mp4
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080_v2.bk2
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080_v2.mp4
 
     # === ILLUSTRATIVE SHAPES (borrowed from other UE5 games — see the NOTE above) ===
     # --- UE4SS loader ---
