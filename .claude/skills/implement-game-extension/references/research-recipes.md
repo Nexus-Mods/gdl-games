@@ -25,6 +25,33 @@ on that store only (Steam still works). Get each right:
 - **steam** — the numeric Steam app id. If the game is installed: read
   `steamapps/appmanifest_<appid>.acf` (`"appid"`). Otherwise the Steam store URL
   (`store.steampowered.com/app/<id>/`) or SteamDB.
+
+  **Layout research without an install — SteamCMD appinfo.** steamdb.info 403s scripted access
+  (Cloudflare), but the data it renders is Steam's own appinfo, fetchable as JSON:
+  ```sh
+  curl -s "https://api.steamcmd.net/v1/info/<appid>"
+  # → .data.<appid>.config.installdir, .config.launch{}, .depots{}, .common.releasestate
+  ```
+  For an unreleased game this is often the **first primary source for paths**: the launch config
+  appears at preload (`releasestate: preloadonly`) or earlier, and its `executable` values are real
+  paths inside the build. It reliably gives the `installdir` and the **default-branch launch exe**.
+
+  **Do NOT take the project folder from a beta-branch launch path.** Internal `Development\…` /
+  `Test\…` entries often expose a codename (`Test\<Codename>\Binaries\Win64\…`), and it is
+  tempting to read the UE project folder off it. On starwarszerocompany that gave `Bruno`; the
+  shipping folder is `SWZeroCompany`. Treat it as the codename only, and mark it `# UNVERIFIED`.
+
+  Depot file lists are not available this way (and a preload depot is encrypted anyway).
+
+  **Once the game is installed, the project folder is free and unambiguous:** UE ships
+  `Manifest_NonUFSFiles_Win64.txt` at the install root, listing every non-packaged file. Its paths
+  are all `Engine/…` or `<Project>/…`:
+  ```sh
+  head -6 "<install>/Manifest_NonUFSFiles_Win64.txt"
+  ```
+  Verify the config leaf at the same time — `%LOCALAPPDATA%/<Project>/Saved/Config/` (run the game
+  once first; UE creates it on first launch) — and check `<Project>/Content/Paks/` for
+  `global.utoc`, which is the better cross-store `requiredFiles` marker if xbox is added later.
 - **epic** — the Epic manifest **`AppName`** (the artifact id), NOT the CatalogItemId or offer id.
   Vortex's `EpicGamesLauncher` sets the entry's `appid = manifest.AppName`. Get it from egdata:
   ```sh
@@ -271,6 +298,7 @@ Verified 2026-07-25. Keep this in sync — `tools/audit-docs.mjs` checks that ev
 | UE5 pak + ReShade + loose DLL | `games/solarpunk` | The fullest UE5 set: `pak`, `pak-iostore`, `pak-alt`, `logicmods`, `ue4ss-injector`, `ue4ss-lua` + `-enabled` + `-bare`, `reshade`, `native-dll`, `root`, `content-folder`. |
 | UE5 **+ config/media mods** | `games/halocampaignevolved` | Solarpunk's set **plus** `config-ini` (`${appDataLocal}` user config) and `menu-movie` (asset replacement). Use this when mods aren't all paks — see SKILL.md Step 4. |
 | UE5, **unreleased** game | `games/outward2` | Shows the `# UNVERIFIED` convention for an exe not yet confirmed against a shipping build, and a deferred `nexus:` block. |
+| UE5, unreleased with **nothing** confirmed | `games/starwarszerocompany` | The extreme case: scaffolded pre-release with no install, no Steam depot/installdir, **zero** Nexus mods and no extension page. Project folder, exe and config leaf are all placeholders. Shows how to mark a whole file `# UNVERIFIED`, document a corpus that can't run at all (the domain doesn't resolve in the v2 API), and label test cases as illustrative rather than real. |
 | UE, file-based version + hooks | `games/gothic1remake` | Also has `src/hooks.ts` (`events.did-deploy`) **and** file-based `discovery.version`. Adds `native-gothic-mod`, `ue4ss-injector-repack`. |
 | Non-UE, LocalLow mod folder | `games/paralives` | `${appDataLocalLow}` mod folder, file-based `discovery.version`, settings-override + overlay installers. |
 | Non-UE, **minimal** (Unity/BepInEx) | `games/moonlightpeaks` | Smallest complete game: 2 installers (`bepinex`, `root`), 1 validator. Copy its *structure* — but it has **zero comments**, so don't copy its documentation habits (see SKILL.md Step 3b). |
