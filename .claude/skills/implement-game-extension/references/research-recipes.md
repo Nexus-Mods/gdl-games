@@ -34,13 +34,24 @@ on that store only (Steam still works). Get each right:
   ```
   For an unreleased game this is often the **first primary source for paths**: the launch config
   appears at preload (`releasestate: preloadonly`) or earlier, and its `executable` values are real
-  paths inside the build. Internal beta-branch entries are the bonus — a full path like
-  `Test\<Codename>\Binaries\Win64\<Codename>-Win64-Test.exe` exposes the UE **project folder** even
-  when the default branch only shows a root bootstrap exe. Verified on starwarszerocompany
-  (2026-08-24): default branch launches root `SWZeroCompany.exe`, while the Development/Test branch
-  entries revealed the project folder `Bruno`. Depot file lists are NOT available this way (and a
-  preload depot is encrypted anyway) — a launch-config observation is still weaker than reading a
-  real install, so keep an on-disk spot-check on the release checklist.
+  paths inside the build. It reliably gives the `installdir` and the **default-branch launch exe**.
+
+  **Do NOT take the project folder from a beta-branch launch path.** Internal `Development\…` /
+  `Test\…` entries often expose a codename (`Test\<Codename>\Binaries\Win64\…`), and it is
+  tempting to read the UE project folder off it. On starwarszerocompany that gave `Bruno`; the
+  shipping folder is `SWZeroCompany`. Treat it as the codename only, and mark it `# UNVERIFIED`.
+
+  Depot file lists are not available this way (and a preload depot is encrypted anyway).
+
+  **Once the game is installed, the project folder is free and unambiguous:** UE ships
+  `Manifest_NonUFSFiles_Win64.txt` at the install root, listing every non-packaged file. Its paths
+  are all `Engine/…` or `<Project>/…`:
+  ```sh
+  head -6 "<install>/Manifest_NonUFSFiles_Win64.txt"
+  ```
+  Verify the config leaf at the same time — `%LOCALAPPDATA%/<Project>/Saved/Config/` (run the game
+  once first; UE creates it on first launch) — and check `<Project>/Content/Paks/` for
+  `global.utoc`, which is the better cross-store `requiredFiles` marker if xbox is added later.
 - **epic** — the Epic manifest **`AppName`** (the artifact id), NOT the CatalogItemId or offer id.
   Vortex's `EpicGamesLauncher` sets the entry's `appid = manifest.AppName`. Get it from egdata:
   ```sh

@@ -1,58 +1,28 @@
 gdl: 1
-version: 0.0.1   # extension version — drives info.json, the release tag, and the zip name
+version: 1.0.0   # extension version — drives info.json, the release tag, and the zip name
 
 # Star Wars: Zero Company (Bit Reactor / Electronic Arts) — single-player turn-based tactics.
-# Steam app 2075800; Nexus domain starwarszerocompany (game id 9861).
+# Steam app 2075800; Nexus domain starwarszerocompany (v1 game id 9987 — it was 9861 at
+# scaffold time and CHANGED when the page was approved on 2026-08-27; use 9987).
 #
-# ============================ SCAFFOLDED PRE-RELEASE ============================
-# Scaffolded UNRELEASED (2026-08-18) with the project folder, exe and config leaf all
-# placeholders — at that point the SteamCMD appinfo had releasestate=prerelease with NO
-# installdir, NO depots and NO launch config.
+# Engine: Unreal Engine 5 (UE5 specifically is inference — press/job-listing evidence,
+# not documented; it only affects the IoStore assumptions below). Layout verified on a
+# real Steam install 2026-08-27:
+#   * Install root: SWZeroCompany.exe (the bootstrap Steam launches), SWZeroCompany/,
+#     Engine/. UE project folder is therefore SWZeroCompany — corroborated by the shipped
+#     Manifest_NonUFSFiles_Win64.txt, which lists only Engine/ and SWZeroCompany/ paths.
+#   * Nested exe SWZeroCompany/Binaries/Win64/SWZeroCompany.exe reports the same
+#     FileVersion as the root bootstrap, so either satisfies getGameVersion.
+#   * IoStore enabled: Content/Paks has global.utoc/.ucas + pakchunk<N>-Windows.*.
+#     global.utoc is the marker to use for requiredFiles if a second store is ever added.
+#   * User config: %LOCALAPPDATA%/SWZeroCompany/Saved/Config/Windows, holding only
+#     GameUserSettings.ini (no Engine.ini — hence setup.ensureDirs).
 #
-# UPDATED 2026-08-24: Steam published the real depot + launch config (releasestate is
-# now `preloadonly`, preload live ahead of the 2026-08-27 release), which resolved most
-# of the unknowns. Source: SteamCMD appinfo for app 2075800, read via
-# api.steamcmd.net/v1/info/2075800 (steamdb.info shows the same data but 403s scripted
-# access — Cloudflare). Observed there:
-#   * installdir "Star Wars Zero Company"; depot 2075801, public manifest
-#     1924520330706248107, ~42.6 GB installed.
-#   * The default (and valve_review) branch launches SWZeroCompany.exe at the INSTALL
-#     ROOT, args `-slnoota` — the usual UE root bootstrap, same shape as games/solarpunk.
-#   * The UE project folder is `Bruno` — Bit Reactor's internal codename, visible in the
-#     internal-branch launch paths (`Development\Bruno\Binaries\Win64\Bruno.exe`,
-#     `Test\Bruno\Binaries\Win64\Bruno-Win64-Test.exe`). Those branches wrap a whole
-#     build in a Development\/Test\ folder next to its own SWZeroCompany.exe bootstrap,
-#     so the default branch's root layout is SWZeroCompany.exe + Bruno/ (+ Engine/).
-#     The codename also retro-explains the Epic artifactId "bruno" (see the stores
-#     block) and the `br.*` cvars / `BR_Automation_Root` map in the launch arguments.
-#
-# Read this before editing: a wrong path in this file still BUILDS GREEN and TESTS
-# GREEN. The unit cases below assert rule wiring against synthetic archive shapes, and
-# the corpus cannot help yet (see the corpus-state note further down), so nothing in CI
-# will catch a bad path. Anything still inferred rather than observed is marked
-# `# UNVERIFIED` on its own line (precedent: games/outward2/game.yaml).
-#
-# STILL OUTSTANDING at release:
-#   1. Spot-check the layout on a real install. The depot FILE LIST itself has not been
-#      read (preload depots are encrypted; steamdb blocks scripted access), so `Bruno`
-#      as the shipping project folder is observed-from-launch-config, not
-#      observed-on-disk. Same for Engine/ existing at the root (standard UE packaging,
-#      but assumed).
-#   2. Confirm the Saved/Config/<TargetPlatform> leaf on a real install (see
-#      context.configPath — the leaf VARIES per game; `Windows` is assumed).
-#   3. Re-run the corpus once real mods exist and promote the shapes it finds into
-#      tests.cases, replacing the illustrative ones (still blocked as of 2026-08-24 —
-#      see the corpus-state note at the bottom).
-# The `nexus:` block already has the real extension-page ids (2026-08-19), so this file
-# is PUBLISHABLE: a `version:` bump merged to main will actually ship to Nexus. Do not
-# bump until step 1 above is done against a real install.
-#
-# Engine: Unreal Engine — now confirmed by a primary source: Steam's own launch config
-# uses UE packaged-build paths (`Bruno\Binaries\Win64\Bruno-Win64-Test.exe` is UE's
-# <Project>\Binaries\<Platform>\<Project>-<Platform>-<Config>.exe naming). That it is
-# UE **5** specifically remains corroborated inference (press/job-listing/UMG evidence,
-# 2026-08-18) rather than observed — it matters only to the IoStore assumptions in the
-# pak installers, which a UE4 build would weaken but not break.
+# A wrong path here breaks every modType destination while the build, unit tests and
+# audit-docs all stay green — only the corpus or a real install catches it. Two earlier
+# guesses at the project folder were both wrong (a Steam dev-branch codename `Bruno`, and
+# `ProjectBruno` from a published mod's archive), so: don't take the project folder from a
+# beta-branch launch path or a mod archive. See references/research-recipes.md §2.
 #
 # MOD SUPPORT CAVEAT: Bit Reactor Lead Producer Caydence Funk, on EA's own site
 # (ea.com/games/starwars/zero-company/news/answering-biggest-questions): "We have a lot
@@ -71,20 +41,14 @@ version: 0.0.1   # extension version — drives info.json, the release tag, and 
 game:
   id: starwarszerocompany
   name: Star Wars Zero Company   # no colon — see the displayName note in the nexus block below
-  # Root bootstrap, verified 2026-08-24: the default-branch Steam launch entry is
-  # `SWZeroCompany.exe` at the install root (appinfo launch config — see header). Same
-  # root-launcher shape as games/solarpunk. The nested shipping exe is presumably
-  # Bruno/Binaries/Win64/Bruno-Win64-Shipping.exe (the Test branch shows
-  # Bruno-Win64-Test.exe), but Vortex should launch the bootstrap Steam launches. A
-  # scalar (not a storeBranch) is correct because only Steam is declared.
+  # The root bootstrap Steam itself launches (not the nested Binaries/Win64 exe, which
+  # reports the same version). Scalar rather than a storeBranch: only Steam is declared.
   executable: SWZeroCompany.exe
 
-  # Same file as executable: a root exe exists at an identical path regardless of arch, so
-  # it is a safe fingerprint. NOTE for release: requiredFiles is a discovery FINGERPRINT,
-  # not the launch target, and every entry must exist (no globs). If other stores are
-  # added, prefer a marker at an identical relative path on every store — for UE5 usually
-  # <Project>/Content/Paks/global.utoc. Do NOT list both arch paths: all-must-exist means
-  # that breaks every store. See recipe §2.
+  # A discovery fingerprint, not the launch target; every entry must exist (no globs).
+  # The root exe sits outside Binaries/<arch>, so it is arch-neutral. If xbox is added,
+  # switch to SWZeroCompany/Content/Paks/global.utoc rather than listing both arch paths —
+  # all-must-exist would otherwise break every store. Recipe §2.
   requiredFiles: [SWZeroCompany.exe]
 
   logo: gameart.webp
@@ -92,22 +56,18 @@ game:
   nexusDomain: starwarszerocompany
   details:
     supportsSymlinks: true
-    gameProjectFolder: Bruno   # internal codename — observed in branch launch paths, see header
+    gameProjectFolder: SWZeroCompany
     ignoreConflicts: [UE4SS-settings.ini, enabled.txt]
 
 # Steam is the only confirmed store.
 #   steam  — 2075800, confirmed via the Steam storesearch API and appdetails
 #            (name "STAR WARS Zero Company™", Bit Reactor / Electronic Arts).
-#            installdir "Star Wars Zero Company", depot 2075801 (see header, 2026-08-24).
-#   epic   — OMITTED, not guessed. The Epic sandbox exists
-#            (de33353d9bed419a8b985a46a34d0956) but publishes ZERO builds and its only
-#            asset is a 1116-byte placeholder with artifactId "bruno" — a pre-purchase
-#            stub. "bruno" turns out to be the game's internal codename (= the UE project
-#            folder, see header 2026-08-24), which makes it MORE plausible as the eventual
-#            AppName but still unconfirmed: Vortex matches the manifest AppName of the
-#            SHIPPING artifact, and no build is published. Re-check egdata (sandbox
-#            assets → artifactId, platform Windows) once builds publish; do not add until
-#            then.
+#            installdir "Star Wars Zero Company", depot 2075801.
+#   epic   — OMITTED. The sandbox (de33353d9bed419a8b985a46a34d0956) publishes no builds;
+#            its only asset is a 1116-byte pre-purchase stub with artifactId "bruno".
+#            Vortex matches the SHIPPING artifact's manifest AppName, so add nothing until
+#            a build publishes — then re-check egdata (sandbox assets → artifactId,
+#            platform Windows).
 #   xbox   — OMITTED. The game has no Microsoft Store PC listing at all: two separate
 #            storeedgefd v9.0 searches ("Star Wars Zero Company", "Star Wars Zero")
 #            returned only unrelated LEGO/Jedi titles. Nothing to resolve an Identity
@@ -125,12 +85,9 @@ context:
     storeBranch:
       default: Win64
 
-  # The UE project folder — `Bruno`, Bit Reactor's internal codename, observed in the
-  # Steam appinfo branch launch paths 2026-08-24 (see header). Every path below derives
-  # from this. Observed-from-launch-config, not yet observed-on-disk: spot-check a real
-  # install at release (header step 1) — if it is wrong, EVERY modType destination is
-  # wrong and the build/tests stay green.
-  gamePath: ${installPath}/Bruno
+  # Every path below derives from this, so a wrong value breaks every modType destination
+  # silently. See the header before changing it.
+  gamePath: ${installPath}/SWZeroCompany
 
   pakModsPath:   ${gamePath}/Content/Paks/~mods
   logicModsPath: ${gamePath}/Content/Paks/LogicMods
@@ -143,14 +100,9 @@ context:
   ue4ssModsPath: ${gamePath}/Binaries/${arch}/ue4ss/Mods
 
   # UE reads user config from %LOCALAPPDATA%/<Project>/Saved/Config/<TargetPlatform>, not
-  # the install dir. The <Project> segment is the UE project name — `Bruno`, per the
-  # launch-path observation above (UE derives this dir from FApp::GetProjectName). The
-  # <TargetPlatform> LEAF is still a guess: it VARIES per game and build — `Windows` (UE5
-  # unified), `WindowsClient` (client-only), `WindowsNoEditor` (UE4). Assuming
-  # `WindowsClient` for Halo was wrong — it ships `Windows`. PCGamingWiki still lists no
-  # Windows config path for this game (re-checked 2026-08-24), so there is nothing to
-  # check against. Verify on a real install before release (header step 2).
-  configPath: ${appDataLocal}/Bruno/Saved/Config/Windows   # UNVERIFIED leaf
+  # the install dir. The leaf varies per game — `Windows` here, but `WindowsClient` or
+  # `WindowsNoEditor` elsewhere — so never copy it to another game unchecked.
+  configPath: ${appDataLocal}/SWZeroCompany/Saved/Config/Windows
 
 modTypes:
   # Rule 6 (CLAUDE.md): once this game is PUBLISHED, these ids are permanent. Vortex stores
@@ -185,7 +137,7 @@ installers:
     when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
     unless:
       any:
-        - { hasFile: "Bruno/**" }
+        - { hasFile: "SWZeroCompany/**" }
         - { hasFile: "Engine/**" }
     anchor: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}"
     take: parent
@@ -202,7 +154,7 @@ installers:
     priority: 16
     when:
       any:
-        - { hasFile: "Bruno/**" }
+        - { hasFile: "SWZeroCompany/**" }
         - { hasFile: "Engine/**" }
     anchor: "**/*"
     take: archive-root
@@ -231,9 +183,9 @@ installers:
     when:
       all:
         - any:
-            - { hasFile: "**/Bruno/**" }
+            - { hasFile: "**/SWZeroCompany/**" }
             - { hasFile: "**/Engine/**" }
-        - not: { hasFile: "Bruno/**" }
+        - not: { hasFile: "SWZeroCompany/**" }
         - not: { hasFile: "Engine/**" }
     copy: { stripCommonRoot: true }
     modType: swzc-root
@@ -282,7 +234,7 @@ installers:
         - { hasFile: "**/*.utoc" }
         - { hasFile: "**/*.dll" }
         - { hasFile: "**/*.lua" }
-        - { hasFile: "Bruno/**" }
+        - { hasFile: "SWZeroCompany/**" }
         - { hasFile: "Engine/**" }
     anchor: "**/{Engine.ini,engine.ini}"
     take: parent
@@ -351,7 +303,7 @@ installers:
         - { hasFile: "**/ReShade.ini" }
         - { hasFile: "**/*.pak" }
         - { hasFile: "**/Scripts/*.lua" }
-        - { hasFile: "**/Bruno/**" }
+        - { hasFile: "**/SWZeroCompany/**" }
         - { hasFile: "**/Engine/**" }
         - { hasFile: "**/Binaries/**" }
     anchor: "**/*.dll"
@@ -370,7 +322,7 @@ installers:
       any:
         - { hasFile: "**/~mods/**" }
         - { hasFile: "**/LogicMods/**" }
-        - { hasFile: "**/Bruno/**" }
+        - { hasFile: "**/SWZeroCompany/**" }
         - { hasFile: "**/Engine/**" }
         - { hasFile: "**/Binaries/**" }
     anchor: "**/Paks/"
@@ -388,7 +340,7 @@ installers:
     unless:
       any:
         - { hasFile: "**/*.pak" }
-        - { hasFile: "**/Bruno/**" }
+        - { hasFile: "**/SWZeroCompany/**" }
         - { hasFile: "**/Engine/**" }
         - { hasFile: "**/Binaries/**" }
         - { hasFile: "**/Paks/**" }
@@ -404,7 +356,7 @@ installers:
     when: { hasFile: "**/*.pak" }
     unless:
       any:
-        - { hasFile: "**/Bruno/**" }
+        - { hasFile: "**/SWZeroCompany/**" }
         - { hasFile: "**/Engine/**" }
         - { hasFile: "**/Binaries/**" }
         - { hasFile: "**/Paks/**" }
@@ -458,43 +410,31 @@ nexus:
   displayName: "Star Wars Zero Company Support for Vortex"
 
 # ---------------------------------------------------------------------------------------
-# CORPUS STATE: NO COVERAGE — and it cannot be obtained yet.
-# As of 2026-08-18 the Nexus page reports mods: 0, file_count: 0, downloads: 0,
-# approved_date: 0 (api.nexusmods.com/v1/games/starwarszerocompany.json). The game is
-# unreleased, so there is nothing published to route. RE-CHECKED 2026-08-24 (Steam
-# preload day): v1 still reports mods: 0 / approved_date: 0, and `test-corpus -- --fetch`
-# still exits 1 with "Unknown Nexus game domain" — both blockers unchanged.
+# CORPUS STATE: 0 usable mods, so the installer ladder below is UNPROVEN against real
+# mods for this game (its destinations are install-verified; its routing is not).
 #
-# `tests.corpus: nexus` is declared below so the loop is wired and ready, but running
-# `pnpm nx run starwarszerocompany:test-corpus -- --fetch` today fails outright with
-#   Unknown Nexus game domain: starwarszerocompany
-# The corpus resolves domains via the v2 GraphQL API, which does not know this domain yet
-# even though the v1 REST API returns a record for it (id 9861) — consistent with a game
-# page that exists but has never been approved (approved_date: 0). So coverage is blocked
-# for TWO independent reasons: the domain is unresolvable, and there are no mods to route.
+# One mod is published (mod 1) and it is broken at source: it ships
+# `ProjectBruno/Content/Movies/Default_Startup.mp4`, and neither that project folder nor
+# that filename exists in the shipping game. It correctly matches no installer, and must
+# stay that way — a `ProjectBruno/` guard would bake a dead codename into a published
+# game.yaml (permanent, CLAUDE.md rule 6), and a `Content/Movies/**` catch-all would
+# silently rewrite any wrapper folder. This is an intentional non-match of the kind
+# docs/corpus-manifests.md describes, not a coverage gap. Next real signal: mods 2-7
+# (currently not_published) going live.
 #
-# The two invocations fail DIFFERENTLY, and the difference matters (both verified here
-# 2026-08-18):
-#   * `test-corpus -- --fetch`  → EXIT 1, Nx reports the task as failed. The unknown-domain
-#     error is thrown in gdl's corpus fetch and propagates, so this one is loud.
-#   * `test-corpus` (bare, empty cache) → EXIT 0, prints "no archives in tests/cache/ —
-#     nothing to do". THIS is the silent vacuous pass described in docs/corpus-manifests.md:
-#     zero coverage that looks exactly like success.
-# So read the output, never the exit code. Once the game is live, do not treat a green
-# corpus run as verification until the `T total` in the summary reconciles against a
-# non-zero `mods` count from the v1 API.
-#
-# Every tests.case below is therefore ILLUSTRATIVE — derived from real archive shapes seen
-# on other UE5 games in this repo (halocampaignevolved, outward2, solarpunk), not from real
-# Star Wars: Zero Company mods, which do not exist. They verify that the RULE WIRING behaves
-# (priority ordering, unless-guards, path flattening) — they do NOT verify that the
-# destination paths are correct for this game, because the project folder is unverified.
-# Replace them with real shapes once the corpus has something to fetch.
+# Running it — `--fetch` alone is NOT enough. It resolves the domain but 404s on
+# UUID-style file uris (the Nexus manifest outage, docs/corpus-manifests.md), then prints
+# "nothing to do" and Nx reports SUCCESS: a vacuous pass. Use the listing tool instead:
+#     node tools/corpus/list-archive.mjs --domain starwarszerocompany --game-id 9987 \
+#       --all --out games/starwarszerocompany/tests/cache
+#     pnpm nx run starwarszerocompany:test-corpus
+# Reconcile the summary's `T total` against the v1 `mods` count before believing it. The
+# cache is gitignored, so re-run both after any installer change.
 # ---------------------------------------------------------------------------------------
 
-# Corpus validators: assertions checked against real Nexus archives via
-# `gdl test:corpus --fetch` (needs NEXUS_API_KEY). Inert until mods exist, but they encode
-# the intended routing now so a future rule change cannot regress it unnoticed.
+# Corpus validators: checked against real Nexus archives by the corpus run. None fire yet
+# (the only published mod matches nothing), so "validators: 0 total" is expected. They
+# encode the intended routing so a future rule change cannot regress it unnoticed.
 validators:
   - id: injector-validator
     name: UE4SS loader archives (dwmapi/xinput/UE4SS-settings.ini) match ue4ss-injector
@@ -503,7 +443,7 @@ validators:
     when:
       all:
         - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
-        - not: { hasFile: "Bruno/**" }
+        - not: { hasFile: "SWZeroCompany/**" }
         - not: { hasFile: "Engine/**" }
     assert: { matched: ue4ss-injector }
 
@@ -519,16 +459,17 @@ validators:
     name: LogicMods paks (not loader / game- or project-relative trees) match logicmods
     # The not-arms exclude shapes that HIGHER-priority installers legitimately claim ahead
     # of logicmods (20): the UE4SS loader (15), game-relative trees via root (16), wrapped
-    # trees via wrapped-root (16.5) — `**/Bruno/**` covers the root-level form too — and
+    # trees via wrapped-root (16.5) — `**/SWZeroCompany/**` covers the root-level form too —
     # project-relative trees via content-folder (17). Without them this validator would
-    # false-fail on a correctly routed `Bruno/Content/Paks/LogicMods/…` archive.
+    # and would otherwise false-fail on a correctly routed
+    # `SWZeroCompany/Content/Paks/LogicMods/…` archive.
     # (halocampaignevolved's equivalent validator has no such arms and got away with it
     # only because no such shape existed in its corpus.)
     when:
       all:
         - { hasFile: "**/LogicMods/**/*.pak" }
         - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
-        - not: { hasFile: "**/Bruno/**" }
+        - not: { hasFile: "**/SWZeroCompany/**" }
         - not: { hasFile: "**/Engine/**" }
         - not: { hasFile: "Content/**" }
         - not: { hasFile: "Config/**" }
@@ -544,7 +485,7 @@ validators:
         - not: { hasFile: "**/*.utoc" }
         - not: { hasFile: "**/*.dll" }
         - not: { hasFile: "**/*.lua" }
-        - not: { hasFile: "Bruno/**" }
+        - not: { hasFile: "SWZeroCompany/**" }
         - not: { hasFile: "Engine/**" }
     assert: { matched: config-ini }
 
@@ -564,11 +505,24 @@ validators:
 
 tests:
   corpus: nexus
-  # NOTE: the `Bruno/…` strings in the archive fixtures below use the real project folder
-  # (observed 2026-08-24, see header), but the fixtures themselves are still synthetic
-  # test INPUTS — illustrative archive shapes borrowed from other UE5 games, not observed
-  # Star Wars Zero Company mods (none exist yet; see the corpus-state note).
+  # Fixtures are synthetic — archive shapes borrowed from other UE5 games in this repo
+  # (halocampaignevolved, outward2, solarpunk), since no working mod exists for this game
+  # yet. They verify rule WIRING: priority ordering, unless-guards, path flattening.
   cases:
+    # Media replacement — the category the first published mod attempted (and got wrong;
+    # see the corpus-state note). Uses a movie filename that really does ship. Worth
+    # keeping in mind that the first mod for this game was media, not a pak: don't assume
+    # the pak-heavy ladder below is what this community will actually ship.
+    - name: "root: correctly-pathed startup-movie replacement deploys verbatim"
+      archive:
+        - SWZeroCompany/Content/Movies/Logo_Startup_1080.mp4
+      expect:
+        matched: root
+        modType: swzc-root
+        plan:
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_1080.mp4
+
+    # === ILLUSTRATIVE SHAPES (borrowed from other UE5 games — see the NOTE above) ===
     # --- UE4SS loader ---
     - name: "ue4ss-injector: dwmapi.dll + ue4ss tree dropped into Binaries"
       archive:
@@ -750,13 +704,13 @@ tests:
     # --- Game-relative trees ---
     - name: "root: project folder + Engine segments deploy intact"
       archive:
-        - Bruno/Content/Paks/foo.pak
+        - SWZeroCompany/Content/Paks/foo.pak
         - Engine/Content/bar.uasset
       expect:
         matched: root
         modType: swzc-root
         plan:
-          - ${installPath}/Bruno/Content/Paks/foo.pak
+          - ${installPath}/SWZeroCompany/Content/Paks/foo.pak
           - ${installPath}/Engine/Content/bar.uasset
 
     # GUARD CASE — asserts the ue4ss-injector `unless` arm. A game-relative archive shipping
@@ -764,16 +718,16 @@ tests:
     # payload outside Binaries/ is silently dropped (the real halo mod-68 failure).
     - name: "injector guard: game-relative loader + pak deploys intact via root"
       archive:
-        - Bruno/Binaries/Win64/dwmapi.dll
-        - Bruno/Binaries/Win64/ue4ss/UE4SS-settings.ini
-        - Bruno/Content/Paks/~mods/Payload_P.pak
+        - SWZeroCompany/Binaries/Win64/dwmapi.dll
+        - SWZeroCompany/Binaries/Win64/ue4ss/UE4SS-settings.ini
+        - SWZeroCompany/Content/Paks/~mods/Payload_P.pak
       expect:
         matched: root
         modType: swzc-root
         plan:
-          - ${installPath}/Bruno/Binaries/Win64/dwmapi.dll
-          - ${installPath}/Bruno/Binaries/Win64/ue4ss/UE4SS-settings.ini
-          - ${installPath}/Bruno/Content/Paks/~mods/Payload_P.pak
+          - ${installPath}/SWZeroCompany/Binaries/Win64/dwmapi.dll
+          - ${installPath}/SWZeroCompany/Binaries/Win64/ue4ss/UE4SS-settings.ini
+          - ${installPath}/SWZeroCompany/Content/Paks/~mods/Payload_P.pak
 
     # GUARD CASE — asserts wrapped-root (16.5). Without it this archive matches NOTHING and
     # installs zero files, silently (six real mods hit this on halocampaignevolved).
@@ -783,25 +737,25 @@ tests:
     # matching games/halocampaignevolved. Don't "fix" these into ${installPath}/… form.
     - name: "wrapped-root: game tree wrapped in a mod-name folder has the wrapper stripped"
       archive:
-        - Cool Mod v2/Bruno/Content/Paks/~mods/Cool_P.pak
+        - Cool Mod v2/SWZeroCompany/Content/Paks/~mods/Cool_P.pak
         - Cool Mod v2/README.txt
       expect:
         matched: wrapped-root
         modType: swzc-root
         plan:
           - README.txt
-          - Bruno/Content/Paks/~mods/Cool_P.pak
+          - SWZeroCompany/Content/Paks/~mods/Cool_P.pak
 
     # GUARD CASE — the converse of the above. A tree ALREADY at the archive root must stay
     # with `root` (16); wrapped-root must decline it, or stripCommonRoot would eat the
     # project-folder segment itself and deploy the tree one level too high.
     - name: "root still wins for an unwrapped tree (wrapped-root declines)"
       archive:
-        - Bruno/Content/Paks/~mods/Cool_P.pak
+        - SWZeroCompany/Content/Paks/~mods/Cool_P.pak
         - README.txt
       expect:
         matched: root
         modType: swzc-root
         plan:
-          - ${installPath}/Bruno/Content/Paks/~mods/Cool_P.pak
+          - ${installPath}/SWZeroCompany/Content/Paks/~mods/Cool_P.pak
           - ${installPath}/README.txt
