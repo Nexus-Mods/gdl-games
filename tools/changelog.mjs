@@ -39,6 +39,15 @@ const FALLBACK = 'Maintenance release — no user-facing changes.';
  * produce a changelog restating the version number the page already shows; `release` covers
  * the version-bump commit that TRIGGERS the release, which published "- Bump to 2.2.0" as
  * the first entry of gothic1remake 2.2.0 before it was added here.
+ *
+ * COROLLARY FOR COMMIT AUTHORS: because `release` is filtered, do not put a release's
+ * SUBSTANCE in the `release(...)` commit — only the version bump belongs there. Describe
+ * the actual work in separate `feat`/`fix` commits (as halocampaignevolved 1.2.0 did:
+ * `feat(halocampaignevolved): Xbox/Game Pass launch + per-store executable; bump to 1.2.0`).
+ * starwarszerocompany 1.0.0 is the counter-example: its verification work rode in a single
+ * `release(...)` commit, so everything was stripped and the page published the older
+ * scaffold subject instead. Nothing here was wrong — the filter did its job — but the
+ * changelog had to be corrected by hand, since fixing it via CI needs another version bump.
  */
 const NOISE_TYPES = new Set([
   'chore', 'docs', 'ci', 'test', 'build', 'style', 'refactor', 'release',
