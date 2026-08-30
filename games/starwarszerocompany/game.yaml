@@ -1,13 +1,15 @@
 gdl: 1
-version: 1.0.1   # extension version — drives info.json, the release tag, and the zip name
+version: 1.0.2   # extension version — drives info.json, the release tag, and the zip name
 
 # Star Wars: Zero Company (Bit Reactor / Electronic Arts) — single-player turn-based tactics.
 # Steam app 2075800; Nexus domain starwarszerocompany (v1 game id 9987 — it was 9861 at
 # scaffold time and CHANGED when the page was approved on 2026-08-27; use 9987).
 #
-# Engine: Unreal Engine 5 (UE5 specifically is inference — press/job-listing evidence,
-# not documented; it only affects the IoStore assumptions below). Layout verified on a
-# real Steam install 2026-08-27:
+# Engine: Unreal Engine 5.6.1, Shipping. Verified 2026-08-30 from a crash report
+# (EngineVersion 5.6.1-196320+++ProjectBruno+Stable), no longer inferred. Logging is
+# compiled out of the Shipping build, so -log and -LogCmds produce no engine log at all;
+# crash dumps under Saved/Crashes are the only engine-side diagnostic.
+# Layout verified on a real Steam install 2026-08-27:
 #   * Install root: SWZeroCompany.exe (the bootstrap Steam launches), SWZeroCompany/,
 #     Engine/. UE project folder is therefore SWZeroCompany — corroborated by the shipped
 #     Manifest_NonUFSFiles_Win64.txt, which lists only Engine/ and SWZeroCompany/ paths.
@@ -55,7 +57,11 @@ game:
   author: Nexus Mods
   nexusDomain: starwarszerocompany
   details:
-    supportsSymlinks: true
+    # Must stay false. Symlinked .utoc/.ucas crash the UE5 Zen loader at startup
+    # (EXCEPTION_ACCESS_VIOLATION in FZenPackageHeader::MakeView), reproduced 2026-08-30
+    # with mod 39; the same mod deploys and runs fine under hardlink. Vortex only ever
+    # tests `=== false`, so the previous `true` was a no-op that read like a verified claim.
+    supportsSymlinks: false
     gameProjectFolder: SWZeroCompany
     ignoreConflicts: [UE4SS-settings.ini, enabled.txt]
 
