@@ -1,5 +1,5 @@
 gdl: 1
-version: 1.0.2   # extension version — drives info.json, the release tag, and the zip name
+version: 1.0.3   # extension version — drives info.json, the release tag, and the zip name
 
 # Star Wars: Zero Company (Bit Reactor / Electronic Arts) — single-player turn-based tactics.
 # Steam app 2075800; Nexus domain starwarszerocompany (v1 game id 9987 — it was 9861 at
@@ -126,7 +126,20 @@ modTypes:
   # Deploys under Content/; the Paks/ subfolder rides along in each file's
   # stripped relative path (so placeAt == this path; see GDL114).
   - { id: swzc-pakalt,         name: "Paks (no ~mods)",            path: "${contentPath}" }
-  - { id: swzc-config,         name: "Config (Engine.ini tweaks)", path: "${configPath}" }
+  # deploymentEssential: false is load-bearing. This is the only modType off the game
+  # drive, and Vortex drops a deployment method that can't handle ANY registered modType.
+  # Hardlink and move both require the target on the same volume as the STAGING folder, so
+  # for a game on D: this one path on C: removed both, and 1.0.2 refuses symlink, leaving
+  # users with no deployment method at all (reproduced 2026-08-31). No staging location can
+  # fix that: it would have to be on both volumes at once. `false` demotes the rejection to
+  # a warning.
+  #
+  # It does NOT make config mods deploy cross-volume. For those users an Engine.ini fails
+  # with EXDEV; Vortex catches that per FILE, so every other mod still deploys, but it
+  # reports "Deployment failed - files were locked by external applications", which is the
+  # wrong diagnosis and unactionable. Release notes must say so. See tests/README.md.
+  - { id: swzc-config,         name: "Config (Engine.ini tweaks)", path: "${configPath}",
+      deploymentEssential: false }
 
 installers:
   # --- Priority 15: UE4SS loader (dwmapi/xinput proxy or UE4SS-settings.ini) → Binaries ---
