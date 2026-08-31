@@ -4,7 +4,10 @@
 // ambiguous unless you say which — reading the wrong one shows a stale session
 // and looks like nothing happened.
 //
-//   node tools/vortex-log.mjs [--dev|--prod] [--path] [--lines N] [--grep RE] [--exclude RE] [--follow]
+//   node tools/vortex-log.mjs [--dev|--prod] [--path] [--lines N] [--grep A|B] [--exclude A|B] [--follow]
+//
+// --grep/--exclude take `|`-separated literal substrings, matched case-insensitively.
+// Not regexes: see the note by their definitions.
 //
 // --follow is a hand-rolled poll rather than `tail -f` or PowerShell
 // `Get-Content -Wait`: Git Bash's tail does not see writes to a file Vortex
@@ -41,17 +44,27 @@ if (!existsSync(log)) {
   process.exit(1);
 }
 
-const grep = flag('--grep', null);
-const re = grep ? new RegExp(grep, 'i') : null;
+// `|`-separated case-insensitive SUBSTRINGS, not regexes. Every filter this tool
+// has ever needed is alternation of literal terms, and building a RegExp from a
+// command-line argument is a regex-injection sink (CodeQL js/regex-injection)
+// that also lets a stray metacharacter throw or hang the watcher. Substring
+// matching is enough and cannot misbehave.
+const terms = (rel) => (flag(rel, '') ?? '')
+  .split('|')
+  .map(t => t.trim().toLowerCase())
+  .filter(Boolean);
+
+const include = terms('--grep');
 // Vortex's startup is dominated by extension/health-check registration, which
-// matches almost any broad pattern. Without an exclude the real events are
+// matches almost any broad filter. Without an exclude the real events are
 // buried, and a monitor that floods gets stopped automatically.
-const exclude = flag('--exclude', null);
-const ex = exclude ? new RegExp(exclude, 'i') : null;
+const exclude = terms('--exclude');
+
 const emit = (line) => {
   if (!line) return;
-  if (ex && ex.test(line)) return;
-  if (!re || re.test(line)) console.log(line);
+  const hay = line.toLowerCase();
+  if (exclude.some(t => hay.includes(t))) return;
+  if (include.length === 0 || include.some(t => hay.includes(t))) console.log(line);
 };
 
 // Backlog: last N lines, filtered.
