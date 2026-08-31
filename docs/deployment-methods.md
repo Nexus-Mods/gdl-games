@@ -95,10 +95,26 @@ if (fs.statSync(installationPath).dev !== fs.statSync(modPaths[typeId]).dev) { .
 ```
 
 A config modType pointing at `${appDataLocal}` therefore removes hardlink and move for the entire
-game for any user whose staging folder is not on C:, leaving symlink as the only option. Vortex's
-escape hatch is `deploymentEssential: false` on that modType, which demotes the rejection from an
-error to a warning. **GDL cannot currently emit it** — `vortex-shim.ts` passes only `{ name }` to
-`registerModType` — so this needs a gdl change before a game can rely on it.
+game for any user whose staging folder is not on the same volume, leaving symlink as the only option.
+If the game also refuses symlinks, they get **no deployment method at all** — and no staging location
+can fix it, because it would have to be on the game's volume and the `%LOCALAPPDATA%` volume at once.
+Reproduced on `starwarszerocompany` 1.0.2 with game and staging both on D:, 2026-08-31.
+
+Set `deploymentEssential: false` on such a modType (see
+[`gdl/README.md`](../gdl/README.md)), which demotes the rejection from an error to a warning and keeps
+hardlink available.
+
+It does **not** make cross-volume deployment work. A mod of that type still fails with `EXDEV:
+cross-device link not permitted`. `LinkingDeployment` catches that **per file**, so the rest of the
+deployment completes and only that mod's files are missing — but Vortex then reports:
+
+> **Deployment failed.** N files were not correctly deployed (see log for details). The most likely
+> reason is that files were locked by external applications so please ensure no other application has
+> a mod file open, then repeat deployment.
+
+That diagnosis is wrong for a cross-volume link, and closing applications will never fix it. Any game
+relying on this flag must say so in its release notes, or the reports arrive as "deployment is
+broken". A `diagnostics:` health check stating the real reason is the better long-term answer.
 
 **Existence.** Hardlink checks `fs.accessSync(path, W_OK)` before the volume check, and a path that
 does not exist yet throws `ENOENT`, which Vortex reports as:
@@ -145,8 +161,10 @@ working, and both look like a failure, so say so in the release note.
 1. Does `Content/Paks` hold `.utoc`/`.ucas`? If yes, set `details.supportsSymlinks: false`.
 2. Never write `supportsSymlinks: true`. Omit the key instead.
 3. Does any modType target a path outside the game folder (`${appDataLocal}`, `${appDataRoaming}`,
-   Documents)? If so, that modType removes hardlink and move for off-C: users, and there is currently
-   no way to mark it non-essential from `game.yaml`.
+   Documents)? If so it removes hardlink and move for every user whose game is on another volume, so
+   mark it `deploymentEssential: false`. Combined with rule 1 that is the difference between "works"
+   and "no deployment method at all". Then note in the release notes that mods of that type fail for
+   those users under a misleading "files were locked" message.
 4. Verifying it needs the real app. Nothing in this repo's build, tests, corpus or `audit-docs`
    inspects `details`. See `tools/install-extension.mjs` and `tools/vortex-log.mjs`.
 
