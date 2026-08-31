@@ -96,7 +96,7 @@ if (fs.statSync(installationPath).dev !== fs.statSync(modPaths[typeId]).dev) { .
 
 A config modType pointing at `${appDataLocal}` therefore removes hardlink and move for the entire
 game for any user whose staging folder is not on the same volume, leaving symlink as the only option.
-If the game also refuses symlinks, they get **no deployment method at all** — and no staging location
+If the game also refuses symlinks, they get **no deployment method at all**, and no staging location
 can fix it, because it would have to be on the game's volume and the `%LOCALAPPDATA%` volume at once.
 Reproduced on `starwarszerocompany` 1.0.2 with game and staging both on D:, 2026-08-31.
 
@@ -106,7 +106,7 @@ hardlink available.
 
 It does **not** make cross-volume deployment work. A mod of that type still fails with `EXDEV:
 cross-device link not permitted`. `LinkingDeployment` catches that **per file**, so the rest of the
-deployment completes and only that mod's files are missing — but Vortex then reports:
+deployment completes and only that mod's files are missing. But Vortex then reports:
 
 > **Deployment failed.** N files were not correctly deployed (see log for details). The most likely
 > reason is that files were locked by external applications so please ensure no other application has

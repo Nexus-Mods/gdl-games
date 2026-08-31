@@ -16,7 +16,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 // A dev Vortex run from source (C:\src\Vortex) uses the @vortex/main appdata
 // dir; an installed build uses Vortex/. They are separate instances with
-// separate plugins and separate logs — installing into the wrong one looks like
+// separate plugins and separate logs, so installing into the wrong one looks like
 // a silent no-op.
 const VORTEX_DATA = {
   dev: join(process.env.APPDATA ?? '', '@vortex', 'main'),
@@ -45,7 +45,7 @@ const running = spawnSync('powershell', ['-NoProfile', '-Command',
   "(Get-Process | Where-Object { $_.ProcessName -match 'electron|vortex' } | Measure-Object).Count"],
   { encoding: 'utf8' });
 if ((running.stdout ?? '').trim() !== '0') {
-  console.error('Vortex (or an electron process) is running — close it first.');
+  console.error('Vortex (or an electron process) is running. Close it first.');
   process.exit(1);
 }
 
@@ -57,7 +57,7 @@ if (!skipBuild) {
 
 const dist = join(gameDir, 'dist');
 if (!existsSync(join(dist, 'info.json'))) {
-  console.error(`no dist/info.json for ${gameId} — build first (drop --no-build)`);
+  console.error(`no dist/info.json for ${gameId}. Build first (drop --no-build)`);
   process.exit(1);
 }
 
@@ -66,7 +66,7 @@ if (!existsSync(join(dist, 'info.json'))) {
 const info = JSON.parse(readFileSync(join(dist, 'info.json'), 'utf8'));
 const pluginsDir = join(VORTEX_DATA[channel], 'plugins');
 if (!existsSync(pluginsDir)) {
-  console.error(`no plugins dir at ${pluginsDir} — is the ${channel} Vortex installed?`);
+  console.error(`no plugins dir at ${pluginsDir}. Is the ${channel} Vortex installed?`);
   process.exit(1);
 }
 const target = join(pluginsDir, info.id);
