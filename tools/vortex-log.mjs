@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Locate and tail a Vortex log. The dev build (run from source, e.g. C:\src\Vortex)
 // and an installed build keep entirely separate appdata dirs, so "the log" is
-// ambiguous unless you say which — reading the wrong one shows a stale session
+// ambiguous unless you say which. Reading the wrong one shows a stale session
 // and looks like nothing happened.
 //
 //   node tools/vortex-log.mjs [--dev|--prod] [--path] [--lines N] [--grep A|B] [--exclude A|B] [--follow]
