@@ -44,6 +44,14 @@ Stronger evidence than the corpus: real mods installed through Vortex against a 
 (`Halo Campaign Evolved`, project folder `Meteorite`), with the deployed paths and symlink targets
 checked on disk. All 8 installers that published mods exercise were confirmed.
 
+> **This verified where files landed, not that the game loaded them.** It was run under **symlink**
+> deployment, which we now know crashes UE5 IoStore titles at startup — proven on
+> `starwarszerocompany` (see `games/starwarszerocompany/tests/README.md` and
+> [`docs/deployment-methods.md`](../../../docs/deployment-methods.md)). This game is very likely
+> affected the same way and still has `supportsSymlinks: true`, which is a no-op. **Untested**: the
+> game is not installed locally. Re-run the pak rows under hardlink before trusting the `pak` and
+> `pak-iostore` entries below.
+
 | Installer | modType assigned | Mod(s) | Deployed to — verified |
 |---|---|---|---|
 | `ue4ss-injector` | `hce-ue4ss-injector` | 9 | `Meteorite/Binaries/Win64/` — `dwmapi.dll` + `ue4ss/` |

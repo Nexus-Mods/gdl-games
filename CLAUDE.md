@@ -16,6 +16,7 @@ to every session.
 | Setup, Nx targets, releasing | [`README.md`](README.md) |
 | Corpus verification: how it works, how it fails silently, the manifest outage, the workaround | [`docs/corpus-manifests.md`](docs/corpus-manifests.md) |
 | What breaks for existing users when you edit a **published** game.yaml | [`docs/published-extension-stability.md`](docs/published-extension-stability.md) |
+| Deployment methods: `supportsSymlinks`, why UE5 IoStore games must refuse symlinks, how a modType path removes a method | [`docs/deployment-methods.md`](docs/deployment-methods.md) |
 | Authoring a **new** game end-to-end | the `implement-game-extension` skill |
 | Research recipes (store ids, artwork URLs) + which game to copy | `.claude/skills/implement-game-extension/references/research-recipes.md` |
 | Why a specific game does what it does | that game's `game.yaml` comments |
