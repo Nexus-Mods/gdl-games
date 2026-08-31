@@ -1,4 +1,4 @@
-# Manual verification — Star Wars Zero Company
+# Manual verification: Star Wars Zero Company
 
 ## Symlink deployment crashes the game (2026-08-30)
 
@@ -27,7 +27,7 @@ FAsyncLoadingThread2::Run()
 ```
 
 `FZenPackageHeader` / `FAsyncPackage2` / `FAsyncLoadingThread2` are the UE5 Zen loader, reached only
-by the IoStore path — a legacy `.pak` never gets there. Crashed on the GameThread at
+by the IoStore path. A legacy `.pak` never gets there. Crashed on the GameThread at
 `SecondsSinceStart = 0` during initial package load, with `bIsOOM = 0`, so a bad read rather than a
 bad allocation.
 
@@ -55,7 +55,7 @@ real-size contrast above is the evidence for it.
   while a control string (`Unreal`) is present. `-log` and `-LogCmds` open a console but produce
   nothing; the only output is Steam's own breakpad init. **Crash dumps under `Saved/Crashes` are the
   only engine-side diagnostic.**
-- **`setup.ensureDirs` resolves correctly** — `~mods`, `ue4ss/Mods` and the `%LOCALAPPDATA%` config
+- **`setup.ensureDirs` resolves correctly**: `~mods`, `ue4ss/Mods` and the `%LOCALAPPDATA%` config
   dir were all created on first manage.
 - **The install layout matches `game.yaml`**: root `SWZeroCompany.exe`, `SWZeroCompany/`, `Engine/`,
   and `Content/Paks` holding `global.utoc/.ucas` plus `pakchunk0`, `pakchunk0optional` and
@@ -76,3 +76,55 @@ The "lack of write access" text is misleading: hardlink's `fs.accessSync(path, W
 `ENOENT` on a path that does not exist, and Vortex reports that as a permissions problem. It
 recovered on the next evaluation and nothing was persisted, but the race is real. See
 [`docs/deployment-methods.md`](../../../docs/deployment-methods.md).
+
+## 1.0.3: the cross-volume block, and its fix (2026-08-31)
+
+1.0.2 fixed the crash but introduced a hard block. With **game and staging both on D:** Vortex
+offered no deployment method at all and showed "Mods can't be deployed."
+
+`swzc-config` is the only modType off the game drive. Hardlink and move both compare a modType's
+target against the STAGING folder, and `getSupportedActivators` requires a method to support every
+registered modType, so that one path on C: removed both. 1.0.2 refuses symlink, so nothing remained.
+Measured `dev` ids on the real setup:
+
+```
+staging  (the game's volume, D: on this machine)    dev=2358103571
+swzc-pak / logicmods / binaries / root / ...       dev=2358103571   PASS
+swzc-config  %LOCALAPPDATA%\SWZeroCompany\...      dev=1182716225   FAIL
+```
+
+No staging location can fix it: it would have to be on D: and C: at once.
+
+`deploymentEssential: false` (game-description-language#9) demotes that rejection to a warning.
+Verified on the same setup: Hardlink Deployment offered and selected, mod 39 deployed as six
+hardlinks with real sizes.
+
+### What it does not fix
+
+A config mod still cannot deploy for those users:
+
+```
+[WARN] failed to link {"link":"Engine.ini",
+  "error":"EXDEV: cross-device link not permitted, link
+    '<staging>\Engine.ini' -> '%LOCALAPPDATA%\SWZeroCompany\Saved\Config\Windows\Engine.ini'"}
+```
+
+`LinkingDeployment.ts:255-268` catches link failures **per file**, so the deployment still runs to
+completion and every other mod deploys. Only that mod's files are missing. An earlier reading of the
+code predicted the whole deployment would abort; testing disproved that.
+
+The user-facing part is the real problem. Because the error count incremented, Vortex shows:
+
+> **Deployment failed.** 1 files were not correctly deployed (see log for details). The most likely
+> reason is that files were locked by external applications so please ensure no other application
+> has a mod file open, then repeat deployment.
+
+That diagnosis is wrong for a cross-volume link, and nothing the user does to applications will fix
+it. Release notes must say so. A `diagnostics:` health check stating the real reason would be the
+better answer.
+
+### Reproducing
+
+Game and staging on a non-system volume, then Settings -> Mods. Note the deployment-method reasons
+are **not** logged: `IUnavailableReason.description` is a lazy function rendered only into the
+dialog, so a log alone cannot explain a "can't be deployed" report. Ask for the dialog too.
