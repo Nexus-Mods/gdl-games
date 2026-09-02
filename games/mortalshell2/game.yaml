@@ -1,0 +1,926 @@
+# Mortal Shell II — Vortex GDL extension
+#
+# Engine: Unreal Engine with IoStore (.pak / .ucas / .utoc). Observed on retail
+# Steam build 24772279 on 2026-08-17.
+# Shipping exe: MortalShell2/Binaries/Win64/MortalShell2-Win64-Shipping.exe
+# Steam bootstrap at install root: MortalShell2.exe; retail retains the internal
+# MortalShell2 game folder.
+# Retail Steam AppID: 2584270. Steam supplies the install path.
+#
+# Framework ownership (optional — never pre-installed by managing the game):
+#   UE4SS: absent | partial | vortex-managed | externally-managed | ultra-managed
+#   Healthy UE4SS: dwmapi.dll + ue4ss/UE4SS.dll + ue4ss/Mods/
+#   Ultra+: UltraPlusExtensions/, ~UltraPlus_*, %LOCALAPPDATA%/UltraPlusManager
+#   DmgModLoader (DML): Content/Paks/dml/ with .pak payload — NOT Binaries/Win64/DML
+#     (that path is Microsoft DirectML on retail).
+#   RHI / RenoDX: dxgi.dll, reshade.ini, reshade-shaders/, *.addon64 — separate.
+#   dwmapi.dll + dxgi.dll together is valid (not a conflict).
+# Nexus mod 5 = verified UE4SS runtime (dwmapi.dll + ue4ss/ including BPModLoaderMod).
+# Archives with dwmapi/UE4SS.dll install as framework → Binaries/Win64 (not ue4ss/Mods).
+# DmgModLoader (mods/4 → Content/Paks/dml) is preferred for fresh LogicMod resolution.
+# Healthy UE4SS + enabled BPModLoaderMod remains valid LogicMod satisfaction/coexistence.
+# The framework dependency diagnostic is one per-mod Vortex 2.4 health check —
+# modFrameworkDependencyCheck (checkMod only, no fix; IModHealthCheck cannot carry
+# a Fix action in Vortex 2.4). Missing `triggers` on a registered check crashes
+# HealthCheckRegistry and bricks Vortex; YAML registration stays deferred below.
+#
+# Other notes:
+#   - Standard asset paks → Content/Paks/~mods (matches Ultra+ layout).
+#   - LogicMods → Content/Paks/LogicMods/<ModName>/ — need healthy DML or enabled BPModLoaderMod
+#     under ue4ss/Mods (included in Nexus mortalshell2/mods/5). Bare UE4SS/Ultra+ without that Lua mod ≠ enough.
+# Contribution backlog / publish checklist: PLAN.md (working notes; not in the zip).
+# Kinship: games/subnautica2 (UE5 + UE4SS hooks) + games/solarpunk (ReShade).
+
+gdl: 1
+version: 1.0.0
+
+game:
+  id: mortalshell2
+  name: Mortal Shell II
+  # Prefer the shipping executable (not the Steam bootstrap MortalShell2.exe).
+  executable: MortalShell2/Binaries/Win64/MortalShell2-Win64-Shipping.exe
+  requiredFiles:
+    - MortalShell2.exe
+    - MortalShell2/Binaries/Win64/MortalShell2-Win64-Shipping.exe
+  logo: gameart.webp
+  author: Nexus Mods
+  nexusDomain: mortalshell2
+  queryModPath: ${pakModsPath}
+  details:
+    # Prefer hardlinks (same drive as staging). Keep symlinks available as fallback —
+    # supportsSymlinks:false + one unwritable modType path yields "No deployment method".
+    supportsSymlinks: true
+    gameProjectFolder: MortalShell2
+    # Staging folder must share the game drive for hardlinks (e.g. D:\Vortex\{game}).
+    ignoreConflicts:
+      - mods.txt
+      - UE4SS-settings.ini
+      - enabled.txt
+      - reshade.ini
+    ignoreDeploy:
+      - mods.txt
+
+stores:
+  # Retail Steam discovery. Steam supplies the install path; do not hardcode its leaf.
+  steam: "2584270"
+
+context:
+  gamePath: ${installPath}/MortalShell2
+  win64Path: ${gamePath}/Binaries/Win64
+  paksPath: ${gamePath}/Content/Paks
+  pakModsPath: ${gamePath}/Content/Paks/~mods
+  dmlPath: ${gamePath}/Content/Paks/dml
+  logicModsPath: ${gamePath}/Content/Paks/LogicMods
+  ue4ssRootPath: ${win64Path}/ue4ss
+  ue4ssModsPath: ${win64Path}/ue4ss/Mods
+
+modTypes:
+  - {
+      id: mortalshell2-ue4ss-framework,
+      name: "UE4SS Framework",
+      path: "${win64Path}",
+    }
+  - {
+      id: mortalshell2-ue4ss-mod,
+      name: "UE4SS Mod",
+      path: "${win64Path}",
+    }
+  # Use Win64 as the Vortex root; installers preserve the ue4ss/ subtree.
+  - {
+      id: mortalshell2-ue4ss-tree,
+      name: "UE4SS tree (ue4ss/Mods)",
+      path: "${win64Path}",
+    }
+  # DmgModLoader (Nexus mortalshell2/mods/4) — NOT Microsoft DirectML, NOT ~mods
+  - {
+      id: mortalshell2-dml-framework,
+      name: "DmgModLoader (DML)",
+      path: "${paksPath}",
+    }
+  - {
+      id: mortalshell2-dml-tree,
+      name: "DmgModLoader tree (Content/Paks)",
+      path: "${paksPath}",
+    }
+  # Flat LogicMods are prefixed below the shipped Paks deployment root.
+  - {
+      id: mortalshell2-logicmods,
+      name: "LogicMods (named mod folder)",
+      path: "${paksPath}",
+    }
+  # Archives that already include a LogicMods/ segment deploy under Content/Paks
+  - {
+      id: mortalshell2-logicmods-tree,
+      name: "LogicMods tree (Content/Paks)",
+      path: "${paksPath}",
+    }
+  - {
+      id: mortalshell2-pak,
+      name: "PAK mods (~mods)",
+      path: "${pakModsPath}",
+    }
+  - {
+      id: mortalshell2-unsupported,
+      name: "Recognized but unsupported payload",
+      path: "${pakModsPath}",
+    }
+  - {
+      id: mortalshell2-binaries,
+      name: "Binaries add-on (ReShade / RenoDX)",
+      path: "${win64Path}",
+    }
+  # ReShade preset only (no bundled runtime) — Nexus mod 9 shape; the hook suggests
+  # installing ReShade from reshade.me when no runtime is present in Binaries/Win64.
+  - {
+      id: mortalshell2-reshade-preset,
+      name: "ReShade preset",
+      path: "${win64Path}",
+    }
+  - {
+      id: mortalshell2-root,
+      name: "Root (game folder)",
+      path: "${installPath}",
+    }
+  - {
+      id: mortalshell2-contentfolder,
+      name: "Content / project folder",
+      path: "${gamePath}",
+    }
+
+installers:
+  # --- 15: UE4SS framework (Nexus mod 5 shape: dwmapi + ue4ss/ + stock Lua mods) ---
+  # Matches even when Scripts/*.lua are present — those are part of the runtime pack
+  # (BPModLoaderMod, ConsoleEnablerMod, …). Must NOT route to ue4ss/Mods alone.
+  - id: ue4ss-framework
+    priority: 15
+    when: { hasFile: "**/{dwmapi.dll,UE4SS.dll,ue4ss.dll}" }
+    unless:
+      any:
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/{dwmapi.dll,UE4SS.dll,ue4ss.dll}"
+    take: parent
+    placeAt: "${win64Path}"
+    modType: mortalshell2-ue4ss-framework
+
+  # --- 16: DmgModLoader already under dml/ ---
+  - id: dml-framework-rooted
+    priority: 16
+    when: { hasFile: "**/dml/dml.pak" }
+    unless:
+      any:
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+        - { hasFile: "**/Scripts/*.lua" }
+    anchor: "**/dml/"
+    take: self
+    placeAt: "${paksPath}"
+    modType: mortalshell2-dml-tree
+
+  # --- 17: flat DML archive (dml.pak + dmlcore_P.* at root) → Content/Paks/dml/ ---
+  - id: dml-framework
+    priority: 17
+    when:
+      all:
+        - { hasFile: "**/dml.pak" }
+        - { hasFile: "**/dml.ucas" }
+        - { hasFile: "**/dml.utoc" }
+    unless:
+      any:
+        - { hasFile: "**/dml/dml.pak" }
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/{dwmapi.dll,UE4SS.dll}" }
+    install: { hook: installDmlFramework }
+    modType: mortalshell2-dml-framework
+
+  # --- 19: UE4SS mod plus sibling shared dependency tree ---
+  # Nexus mod 20 optional file 29 ships MortalShell2Mod/ and shared/ as peers.
+  # Keep the complete archive root so ModMenu is not truncated by the generic
+  # ModName/Scripts rule below.
+  - id: ue4ss-mod-shared
+    priority: 19
+    when:
+      all:
+        - { hasFile: "MortalShell2Mod/Scripts/main.lua" }
+        - { hasFile: "shared/ModMenu/ModMenu.lua" }
+    unless:
+      any:
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+        - { hasFile: "**/{dwmapi.dll,UE4SS.dll,ue4ss.dll}" }
+    install: { hook: installUe4ssModShared }
+    modType: mortalshell2-ue4ss-mod
+
+  # --- 20: UE4SS mod already rooted at ue4ss/Mods/... ---
+  - id: ue4ss-mod-rooted
+    priority: 20
+    when: { hasFile: "**/ue4ss/Mods/**/Scripts/*.lua" }
+    unless: { hasFile: "**/{dwmapi.dll,UE4SS.dll,ue4ss.dll}" }
+    install: { hook: installUe4ssModRooted }
+    modType: mortalshell2-ue4ss-tree
+
+  # --- 21: UE4SS mod rooted at Mods/ModName/... ---
+  - id: ue4ss-mod-mods-prefix
+    priority: 21
+    when: { hasFile: "**/Mods/**/Scripts/*.lua" }
+    unless:
+      any:
+        - { hasFile: "**/ue4ss/Mods/**/Scripts/*.lua" }
+        - { hasFile: "**/{dwmapi.dll,UE4SS.dll,ue4ss.dll}" }
+    install: { hook: installUe4ssModModsPrefix }
+    modType: mortalshell2-ue4ss-tree
+
+  # --- 22: UE4SS mod ModName/Scripts/main.lua ---
+  - id: ue4ss-mod-scripts
+    priority: 22
+    when: { hasFile: "**/Scripts/*.lua" }
+    unless:
+      any:
+        - { hasFile: "**/{dwmapi.dll,UE4SS.dll,ue4ss.dll}" }
+        - { hasFile: "**/ue4ss/Mods/**/Scripts/*.lua" }
+        - { hasFile: "**/Mods/**/Scripts/*.lua" }
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+    install: { hook: installUe4ssModScripts }
+    modType: mortalshell2-ue4ss-mod
+
+  # --- 23: UE4SS mod enabled.txt only ---
+  - id: ue4ss-mod-enabled
+    priority: 23
+    when: { hasFile: "**/enabled.txt" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/{dwmapi.dll,UE4SS.dll,ue4ss.dll}" }
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+    install: { hook: installUe4ssModEnabled }
+    modType: mortalshell2-ue4ss-mod
+
+  # --- 24: archive already containing Content/Paks/LogicMods ---
+  - id: logicmods-rooted
+    priority: 24
+    when: { hasFile: "**/Content/Paks/LogicMods/**" }
+    unless:
+      any:
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/Content/Paks/LogicMods/"
+    take: self
+    placeAt: "${paksPath}"
+    modType: mortalshell2-logicmods-tree
+
+  # --- 25: LogicMods folder at archive root / wrapper ---
+  - id: logicmods-folder
+    priority: 25
+    when: { hasFile: "**/LogicMods/**/*.{pak,ucas,utoc}" }
+    unless:
+      any:
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+        - { hasFile: "**/Content/Paks/LogicMods/**" }
+    anchor: "**/LogicMods/"
+    take: self
+    placeAt: "${paksPath}"
+    modType: mortalshell2-logicmods-tree
+
+  # --- 26: LogicMod payload shipped as a bare triplet at the archive root ---
+  # Nexus mod 6 (AutoPickup) is the ONLY corpus-proven LogicMod and ships exactly
+  # AutoPickup.pak + .ucas + .utoc with no wrapper folder — so this rule matches
+  # that exact flat-root signature, not any non-_P triplet. Arbitrary triplets
+  # (flat OrdinaryAsset.* or a named-folder AutoPickup/*) have no such evidence
+  # and fall through to the ordinary pak installer (~mods) — see the "guard:
+  # arbitrary flat-root IoStore triplet" and "guard: named-folder triplet without
+  # LogicMods/" cases. Game-tree/framework archives keep their dedicated routing.
+  - id: logicmods-root-triplet
+    priority: 26
+    when:
+      all:
+        - { hasFile: "AutoPickup.pak" }
+        - { hasFile: "AutoPickup.ucas" }
+        - { hasFile: "AutoPickup.utoc" }
+    unless:
+      any:
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+        - { hasFile: "**/{dwmapi.dll,dxgi.dll,UE4SS.dll}" }
+    install: { hook: installLogicModsRootTriplet }
+    modType: mortalshell2-logicmods
+
+  # --- 27: ReShade preset shipped as a flat *reshade*.ini at the archive root ---
+  # Nexus mod 9 (Vibrant Reshade - Mortal Shell II) is exactly two files: the preset
+  # .ini plus its ReadMe. Top-level pattern only — INIs inside game trees stay with
+  # the root/content-folder installers, and archives carrying IoStore assets or
+  # framework dlls keep their dedicated routing (see the "guard: arbitrary ini" case).
+  # ReShade itself is NOT bundled; afterDeploy suggests installing it from
+  # reshade.me when no runtime exists beside the shipping exe.
+  - id: reshade-preset
+    priority: 27
+    when: { hasFile: "*reshade*.ini" }
+    unless:
+      any:
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+        - { hasFile: "**/*.{pak,ucas,utoc}" }
+        - { hasFile: "**/{dxgi.dll,dwmapi.dll,UE4SS.dll}" }
+    anchor: "*reshade*.ini"
+    take: parent
+    placeAt: "${win64Path}"
+    modType: mortalshell2-reshade-preset
+
+  # --- 29: recognized but unsupported top-level Engine.ini ---
+  # Nexus mods 13 and 17 currently ship this exact strong signature. Preserve
+  # the archive tree at the default ~mods path; functionality is not serviced.
+  - id: unsupported-engine-ini
+    priority: 29
+    when: { hasFile: "Engine.ini" }
+    unless:
+      any:
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+        - { hasFile: "Content/**" }
+        - { hasFile: "Binaries/**" }
+        - { hasFile: "**/*.{pak,ucas,utoc}" }
+        - { hasFile: "**/{dxgi.dll,dwmapi.dll,UE4SS.dll}" }
+        # Locked archives contain this one path only; any sibling stays unknown.
+        - { matches: "^(?!Engine\\.ini$).*" }
+    anchor: "Engine.ini"
+    take: archive-root
+    placeAt: "${pakModsPath}"
+    modType: mortalshell2-unsupported
+
+  # --- 29: recognized but unsupported SaveGames payload ---
+  # Nexus mod 23 file 32 exact signature; preserve the complete SaveGames tree.
+  - id: unsupported-save
+    priority: 29
+    when: { hasFile: "SaveGames/WorldState_0.sav" }
+    unless:
+      any:
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+        - { hasFile: "Content/**" }
+        - { hasFile: "Binaries/**" }
+        - { hasFile: "**/*.{pak,ucas,utoc}" }
+        - { hasFile: "**/{dxgi.dll,dwmapi.dll,UE4SS.dll}" }
+        # Accept only Vortex's harmless directory marker plus the exact save.
+        # Any root sibling or nested SaveGames payload stays unknown.
+        - { matches: "^(?!(?:SaveGames/?|SaveGames/WorldState_0\\.sav)$).*" }
+    install: { hook: installUnsupportedSave }
+    modType: mortalshell2-unsupported
+
+  # --- 29: recognized but unsupported standalone Electron remapper ---
+  # Require three independent exact markers from Nexus mod 8 file 12 so generic
+  # Electron archives and arbitrary Chromium .pak files remain fail-closed.
+  - id: unsupported-external-app
+    priority: 29
+    when:
+      all:
+        - { hasFile: "**/Witcher Remapper – Mortal Shell 2.exe" }
+        - { hasFile: "**/resources/app.asar" }
+        - { hasFile: "**/resources/data/IMC_Default_Gamepad.json" }
+    anchor: "**/resources/app.asar"
+    take: archive-root
+    placeAt: "${pakModsPath}"
+    modType: mortalshell2-unsupported
+
+  # --- 10: game-root-relative (MortalShell2/ or Engine/) ---
+  - id: root
+    priority: 10
+    when:
+      any:
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}"
+    modType: mortalshell2-root
+
+  # --- 11: project-relative Content/Binaries/Config trees ---
+  - id: content-folder
+    priority: 11
+    when:
+      any:
+        - { hasFile: "Content/**" }
+        - { hasFile: "Binaries/**" }
+        - { hasFile: "Config/**" }
+    unless:
+      any:
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+        # Let dedicated LogicMods installers own these trees.
+        - { hasFile: "**/Content/Paks/LogicMods/**" }
+        - { hasFile: "**/LogicMods/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${gamePath}"
+    modType: mortalshell2-contentfolder
+
+  # --- 28: standard IoStore / PAK → ~mods (flatten basename) ---
+  - id: pak
+    priority: 28
+    when: { hasFile: "**/*.{pak,utoc}" }
+    unless:
+      any:
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/Content/Paks/LogicMods/**" }
+        - { hasFile: "**/dml.pak" }
+        - { hasFile: "**/dml/**" }
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+        - { hasFile: "Content/**" }
+        - { hasFile: "Binaries/**" }
+        # Nexus mod 8 (Witcher Remapper for MS2) is a standalone Electron remapping
+        # utility — resources/app.asar plus chrome_*.pak/locales/*.pak are Chromium
+        # resources, NOT game IoStore assets. It performs its own Apply/Uninstall
+        # flow and is intentionally unmatched here (no tests.cases entry: the pinned
+        # harness throws when no installer matches; verified via corpus accounting).
+        - { hasFile: "**/*.asar" }
+        - { hasFile: "**/{dwmapi.dll,UE4SS.dll}" }
+    anchor: "**/*.{pak,utoc}"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: mortalshell2-pak
+
+  # --- 30: ReShade / RenoDX binaries add-on ---
+  - id: binaries-addon
+    priority: 30
+    when:
+      any:
+        - { hasFile: "**/dxgi.dll" }
+        - { hasFile: "**/*.addon64" }
+        - { hasFile: "**/reshade.ini" }
+    unless:
+      any:
+        - { hasFile: "**/dwmapi.dll" }
+        - { hasFile: "**/UE4SS.dll" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "MortalShell2/**" }
+        - { hasFile: "Engine/**" }
+        - { hasFile: "**/*.{pak,ucas,utoc}" }
+    anchor: "**/{dxgi.dll,reshade.ini,*.addon64}"
+    take: parent
+    placeAt: "${win64Path}"
+    modType: mortalshell2-binaries
+
+discovery:
+  version: { hook: detectGameVersion }
+
+# Setup guarantees only the ordinary PAK root. Optional framework locations are
+# installed below shipped Win64/Paks ancestors and remain absent until content
+# deploys, so empty directories cannot fabricate partial health evidence.
+setup:
+  ensureDirs:
+    - ${pakModsPath}
+
+events:
+  # Reconcile mods.txt and surface framework guidance after deployment.
+  did-deploy: { hook: afterDeploy }
+
+# TODO(gdl): Enable this once GDL's generated lifecycle fake implements
+# IExtensionContext.registerHealthCheck. The check itself is implemented and
+# covered by Package 04's local dependency test harness.
+#
+# diagnostics:
+#   - hook: modFrameworkDependencyCheck
+
+toolbarActions:
+  - id: open-ue4ss-settings
+    title: Open UE4SS Settings
+    priority: 200
+    target: { openFile: "${ue4ssRootPath}/UE4SS-settings.ini" }
+  - id: open-mods-txt
+    title: Open UE4SS mods.txt
+    priority: 201
+    target: { openFile: "${ue4ssModsPath}/mods.txt" }
+  - id: open-logicmods
+    title: Open LogicMods folder
+    priority: 202
+    target: { openFile: "${logicModsPath}" }
+  - id: open-pak-mods
+    title: Open ~mods folder
+    priority: 203
+    target: { openFile: "${pakModsPath}" }
+
+nexus:
+  modId: 2183
+  fileGroupId: 9041
+  displayName: Mortal Shell II Support for Vortex
+
+tests:
+  # Current Nexus catalogue is reconciled during Package 05; local cache remains ignored.
+  # Custom installer placement and complete static corpus attribution are
+  # exercised in src/installers.test.ts; base GDL's generated static planner
+  # does not execute install hooks.
+  corpus: nexus
+  cases:
+    # 4. Negative guard — named-folder triplet WITHOUT a LogicMods/ segment is an
+    # ordinary asset set: it falls to ~mods (take-parent flattens the folder into
+    # ~mods, same as the SomeMod_P case). No corpus mod ships this shape; Nexus
+    # mod 6 (the only LogicMod) ships flat at the archive root instead.
+    - name: "guard: named-folder triplet without LogicMods/ goes to ~mods"
+      archive:
+        - AutoPickup/AutoPickup.pak
+        - AutoPickup/AutoPickup.ucas
+        - AutoPickup/AutoPickup.utoc
+        - AutoPickup/README.txt
+      expect:
+        matched: pak
+        modType: mortalshell2-pak
+        plan:
+          - ${pakModsPath}/AutoPickup.pak
+          - ${pakModsPath}/AutoPickup.ucas
+          - ${pakModsPath}/AutoPickup.utoc
+          - ${pakModsPath}/README.txt
+
+    # 5. LogicMod already rooted under MortalShell2/.../LogicMods
+    - name: "root: LogicMods under MortalShell2 keeps structure"
+      archive:
+        - MortalShell2/Content/Paks/LogicMods/AutoPickup/AutoPickup.pak
+        - MortalShell2/Content/Paks/LogicMods/AutoPickup/AutoPickup.ucas
+        - MortalShell2/Content/Paks/LogicMods/AutoPickup/AutoPickup.utoc
+      expect:
+        matched: root
+        modType: mortalshell2-root
+        plan:
+          - ${installPath}/MortalShell2/Content/Paks/LogicMods/AutoPickup/AutoPickup.pak
+          - ${installPath}/MortalShell2/Content/Paks/LogicMods/AutoPickup/AutoPickup.ucas
+          - ${installPath}/MortalShell2/Content/Paks/LogicMods/AutoPickup/AutoPickup.utoc
+
+    # 6. Standard PAK-only → ~mods
+    - name: "pak: standard _P patch to ~mods"
+      archive:
+        - MyTextures_P.pak
+        - MyTextures_P.ucas
+        - MyTextures_P.utoc
+      expect:
+        matched: pak
+        modType: mortalshell2-pak
+        plan:
+          - ${pakModsPath}/MyTextures_P.pak
+          - ${pakModsPath}/MyTextures_P.ucas
+          - ${pakModsPath}/MyTextures_P.utoc
+
+    # 7. DML — no local DmgModLoader; document with a standard pak case under ~mods
+    - name: "pak: no DmgModLoader locally — asset pak still routes to ~mods"
+      archive:
+        - SomeMod/SomeMod_P.pak
+        - SomeMod/readme.md
+      expect:
+        matched: pak
+        modType: mortalshell2-pak
+        plan:
+          - ${pakModsPath}/SomeMod_P.pak
+          - ${pakModsPath}/readme.md
+
+    # 8. ReShade archive
+    - name: "binaries: ReShade dxgi + shaders"
+      archive:
+        - dxgi.dll
+        - reshade.ini
+        - reshade-shaders/Shaders/test.fx
+      expect:
+        matched: binaries-addon
+        modType: mortalshell2-binaries
+        plan:
+          - ${win64Path}/dxgi.dll
+          - ${win64Path}/reshade.ini
+          - ${win64Path}/reshade-shaders/Shaders/test.fx
+
+    # 9. RenoDX add-on only
+    - name: "binaries: RenoDX addon64 only"
+      archive:
+        - renodx-ue-extended.addon64
+      expect:
+        matched: binaries-addon
+        modType: mortalshell2-binaries
+        plan:
+          - ${win64Path}/renodx-ue-extended.addon64
+
+    # 10. Fully game-root-relative
+    - name: "root: MortalShell2 + Engine segments"
+      archive:
+        - MortalShell2/Content/Paks/~mods/foo_P.pak
+        - Engine/Content/bar.uasset
+      expect:
+        matched: root
+        modType: mortalshell2-root
+        plan:
+          - ${installPath}/MortalShell2/Content/Paks/~mods/foo_P.pak
+          - ${installPath}/Engine/Content/bar.uasset
+
+    # 12. Ambiguous dwmapi + dxgi — valid coexistence; framework installer copies parent
+    - name: "ue4ss-framework: dwmapi+dxgi same folder (not a conflict)"
+      archive:
+        - dwmapi.dll
+        - dxgi.dll
+        - ue4ss/UE4SS.dll
+      expect:
+        matched: ue4ss-framework
+        modType: mortalshell2-ue4ss-framework
+        plan:
+          - ${win64Path}/dwmapi.dll
+          - ${win64Path}/dxgi.dll
+          - ${win64Path}/ue4ss/UE4SS.dll
+
+    # Nexus mod 5 (UE4SS for MortalShell2, full pack listing) — runtime + stock Mods
+    # incl. BPModLoaderMod → Binaries/Win64, whole tree intact
+    - name: "ue4ss-framework: Nexus mod 5 exact pack"
+      archive:
+        - dwmapi.dll
+        - ue4ss/LICENSE
+        - ue4ss/Mods/BPML_GenericFunctions/Scripts/main.lua
+        - ue4ss/Mods/BPModLoaderMod/Scripts/main.lua
+        - ue4ss/Mods/BPModLoaderMod/load_order.txt
+        - ue4ss/Mods/CheatManagerEnablerMod/Scripts/main.lua
+        - ue4ss/Mods/ConsoleCommandsMod/Scripts/dump_object.lua
+        - ue4ss/Mods/ConsoleCommandsMod/Scripts/main.lua
+        - ue4ss/Mods/ConsoleCommandsMod/Scripts/set.lua
+        - ue4ss/Mods/ConsoleCommandsMod/Scripts/summon_unloaded_assets.lua
+        - ue4ss/Mods/ConsoleEnablerMod/Scripts/main.lua
+        - ue4ss/Mods/Keybinds/Scripts/main.lua
+        - ue4ss/Mods/LineTraceMod/Scripts/main.lua
+        - ue4ss/Mods/SplitScreenMod/Scripts/main.lua
+        - ue4ss/Mods/mods.json
+        - ue4ss/Mods/mods.txt
+        - ue4ss/Mods/shared/UEHelpers/UEHelpers.lua
+        - ue4ss/UE4SS-settings.ini
+        - ue4ss/UE4SS.dll
+        - ue4ss/UE4SS_Signatures/StaticConstructObject.lua
+      expect:
+        matched: ue4ss-framework
+        modType: mortalshell2-ue4ss-framework
+        plan:
+          - ${win64Path}/dwmapi.dll
+          - ${win64Path}/ue4ss/LICENSE
+          - ${win64Path}/ue4ss/Mods/BPML_GenericFunctions/Scripts/main.lua
+          - ${win64Path}/ue4ss/Mods/BPModLoaderMod/Scripts/main.lua
+          - ${win64Path}/ue4ss/Mods/BPModLoaderMod/load_order.txt
+          - ${win64Path}/ue4ss/Mods/CheatManagerEnablerMod/Scripts/main.lua
+          - ${win64Path}/ue4ss/Mods/ConsoleCommandsMod/Scripts/dump_object.lua
+          - ${win64Path}/ue4ss/Mods/ConsoleCommandsMod/Scripts/main.lua
+          - ${win64Path}/ue4ss/Mods/ConsoleCommandsMod/Scripts/set.lua
+          - ${win64Path}/ue4ss/Mods/ConsoleCommandsMod/Scripts/summon_unloaded_assets.lua
+          - ${win64Path}/ue4ss/Mods/ConsoleEnablerMod/Scripts/main.lua
+          - ${win64Path}/ue4ss/Mods/Keybinds/Scripts/main.lua
+          - ${win64Path}/ue4ss/Mods/LineTraceMod/Scripts/main.lua
+          - ${win64Path}/ue4ss/Mods/SplitScreenMod/Scripts/main.lua
+          - ${win64Path}/ue4ss/Mods/mods.json
+          - ${win64Path}/ue4ss/Mods/mods.txt
+          - ${win64Path}/ue4ss/Mods/shared/UEHelpers/UEHelpers.lua
+          - ${win64Path}/ue4ss/UE4SS-settings.ini
+          - ${win64Path}/ue4ss/UE4SS.dll
+          - ${win64Path}/ue4ss/UE4SS_Signatures/StaticConstructObject.lua
+
+    # Extra: LogicMods path without MortalShell2 prefix
+    - name: "logicmods-folder: LogicMods/ModName triplet"
+      archive:
+        - LogicMods/AutoPickup/AutoPickup.pak
+        - LogicMods/AutoPickup/AutoPickup.ucas
+        - LogicMods/AutoPickup/AutoPickup.utoc
+      expect:
+        matched: logicmods-folder
+        modType: mortalshell2-logicmods-tree
+        plan:
+          - ${paksPath}/LogicMods/AutoPickup/AutoPickup.pak
+          - ${paksPath}/LogicMods/AutoPickup/AutoPickup.ucas
+          - ${paksPath}/LogicMods/AutoPickup/AutoPickup.utoc
+
+    # Nexus mod 4 (DmgModLoader v0.5, full pack listing) — dml/ subtree stays intact under Content/Paks
+    - name: "dml-framework-rooted: Nexus mod 4 exact pack"
+      archive:
+        - dml/dml.pak
+        - dml/dml.ucas
+        - dml/dml.utoc
+        - dml/dmlcore_P.pak
+        - dml/dmlcore_P.ucas
+        - dml/dmlcore_P.utoc
+      expect:
+        matched: dml-framework-rooted
+        modType: mortalshell2-dml-tree
+        plan:
+          - ${paksPath}/dml/dml.pak
+          - ${paksPath}/dml/dml.ucas
+          - ${paksPath}/dml/dml.utoc
+          - ${paksPath}/dml/dmlcore_P.pak
+          - ${paksPath}/dml/dmlcore_P.ucas
+          - ${paksPath}/dml/dmlcore_P.utoc
+
+    # Guard (Package 02): a named-folder IoStore triplet with no LogicMods/ segment,
+    # no _P suffix and no framework marker is an ordinary asset set — it must fall
+    # through to the pak installer (~mods), not be claimed as a LogicMod.
+    - name: "guard: arbitrary non-_P IoStore triplet is not a LogicMod"
+      archive:
+        - OrdinaryAsset/OrdinaryAsset.pak
+        - OrdinaryAsset/OrdinaryAsset.ucas
+        - OrdinaryAsset/OrdinaryAsset.utoc
+      expect:
+        matched: pak
+        modType: mortalshell2-pak
+        plan:
+          - ${pakModsPath}/OrdinaryAsset.pak
+          - ${pakModsPath}/OrdinaryAsset.ucas
+          - ${pakModsPath}/OrdinaryAsset.utoc
+
+    # Guard (Package 02 review): an arbitrary FLAT ROOT IoStore triplet is still an
+    # ordinary asset set — only mod 6's exact AutoPickup.* signature may claim a
+    # flat-root triplet as a LogicMod.
+    - name: "guard: arbitrary flat-root IoStore triplet is not a LogicMod"
+      archive:
+        - OrdinaryAsset.pak
+        - OrdinaryAsset.ucas
+        - OrdinaryAsset.utoc
+      expect:
+        matched: pak
+        modType: mortalshell2-pak
+        plan:
+          - ${pakModsPath}/OrdinaryAsset.pak
+          - ${pakModsPath}/OrdinaryAsset.ucas
+          - ${pakModsPath}/OrdinaryAsset.utoc
+
+    # --- Retail-validated Nexus catalogue (listings captured 2026-08-16; tested on retail 2026-08-17) ---
+
+    # Nexus mod 2 (No-HUD-No-Effects / ShaderToggler v0.2) — install-root-relative;
+    # the whole tree incl. top-level docs must stay intact under the install root.
+    - name: "root: Nexus mod 2 ShaderToggler payload"
+      archive:
+        - LICENSE
+        - MortalShell2/Binaries/Win64/ShaderToggler.addon64
+        - MortalShell2/Binaries/Win64/ShaderToggler.ini
+        - MortalShell2/Binaries/Win64/dxgi.dll
+        - README.md
+        - ReadMe.txt
+      expect:
+        matched: root
+        modType: mortalshell2-root
+        plan:
+          - ${installPath}/LICENSE
+          - ${installPath}/MortalShell2/Binaries/Win64/ShaderToggler.addon64
+          - ${installPath}/MortalShell2/Binaries/Win64/ShaderToggler.ini
+          - ${installPath}/MortalShell2/Binaries/Win64/dxgi.dll
+          - ${installPath}/README.md
+          - ${installPath}/ReadMe.txt
+
+    # Nexus mod 3 (Auto Gold Pickup) — UE4SS Lua mod tree already game-root-relative;
+    # narrower ue4ss-mod rules are excluded by MortalShell2/**, so the sibling
+    # signature file and docs survive intact.
+    - name: "root: Nexus mod 3 AutoGoldPickup keeps siblings"
+      archive:
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/AutoGoldPickup/Scripts/main.lua
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/AutoGoldPickup/enabled.txt
+        - MortalShell2/Binaries/Win64/ue4ss/UE4SS_Signatures/StaticConstructObject.lua
+        - README.txt
+      expect:
+        matched: root
+        modType: mortalshell2-root
+        plan:
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/AutoGoldPickup/Scripts/main.lua
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/AutoGoldPickup/enabled.txt
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/UE4SS_Signatures/StaticConstructObject.lua
+          - ${installPath}/README.txt
+
+    # Nexus mod 7 (Health and Resolve Numbers / NumericVitals) — same all-in-one shape.
+    - name: "root: Nexus mod 7 NumericVitals keeps siblings"
+      archive:
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/NumericVitals/Scripts/config.lua
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/NumericVitals/Scripts/main.lua
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/NumericVitals/enabled.txt
+        - README.txt
+      expect:
+        matched: root
+        modType: mortalshell2-root
+        plan:
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/NumericVitals/Scripts/config.lua
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/NumericVitals/Scripts/main.lua
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/NumericVitals/enabled.txt
+          - ${installPath}/README.txt
+
+    # Nexus mod 10 (FOV / ultrawide HUD and more) — ReShade-family payload; the whole
+    # tree (dll, addon64, reshade-shaders/) must land under Binaries/Win64 intact.
+    - name: "binaries-addon: Nexus mod 10 reshade-shaders + addon64"
+      archive:
+        - MortalShell2Core.dll
+        - MortalShell2UI.addon64
+        - Readme_1st.txt
+        - reshade-shaders/Shaders/OSD.fx
+        - reshade-shaders/Textures/FontAtlas.png
+        - reshade-shaders/Textures/font.png
+        - reshade-shaders/Textures/lut.png
+      expect:
+        matched: binaries-addon
+        modType: mortalshell2-binaries
+        plan:
+          - ${win64Path}/MortalShell2Core.dll
+          - ${win64Path}/MortalShell2UI.addon64
+          - ${win64Path}/Readme_1st.txt
+          - ${win64Path}/reshade-shaders/Shaders/OSD.fx
+          - ${win64Path}/reshade-shaders/Textures/FontAtlas.png
+          - ${win64Path}/reshade-shaders/Textures/font.png
+          - ${win64Path}/reshade-shaders/Textures/lut.png
+
+    # Nexus mod 11 (DarkSky) — UE4SS mod tree with AHK panel, game-root-relative.
+    - name: "root: Nexus mod 11 DarkSky keeps siblings"
+      archive:
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/DarkSkyMod/DarkSky.ico
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/DarkSkyMod/DarkSkyPanel.ahk
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/DarkSkyMod/DarkSkyPanel.html
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/DarkSkyMod/DarkSkyPresets.txt
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/DarkSkyMod/Scripts/main.lua
+        - README.txt
+      expect:
+        matched: root
+        modType: mortalshell2-root
+        plan:
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/DarkSkyMod/DarkSky.ico
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/DarkSkyMod/DarkSkyPanel.ahk
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/DarkSkyMod/DarkSkyPanel.html
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/DarkSkyMod/DarkSkyPresets.txt
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/DarkSkyMod/Scripts/main.lua
+          - ${installPath}/README.txt
+
+    # Nexus mod 9 (Vibrant Reshade - Mortal Shell II) — preset-only package: a flat
+    # *reshade*.ini plus its ReadMe at the archive root → Binaries/Win64. ReShade
+    # itself is not bundled; afterDeploy suggests installing it from reshade.me.
+    - name: "reshade-preset: Nexus mod 9 Vibrant Reshade preset"
+      archive:
+        - Vibrant Reshade - Mortal Shell II ReadMe.txt
+        - Vibrant Reshade - Mortal Shell II.ini
+      expect:
+        matched: reshade-preset
+        modType: mortalshell2-reshade-preset
+        plan:
+          - ${win64Path}/Vibrant Reshade - Mortal Shell II ReadMe.txt
+          - ${win64Path}/Vibrant Reshade - Mortal Shell II.ini
+
+    # Guard (Package 02): an INI inside a game tree is project data, not a ReShade
+    # preset — the *reshade*.ini pattern is top-level only.
+    - name: "guard: arbitrary ini in Config/ is not treated as ReShade preset"
+      archive:
+        - Config/Unrelated.ini
+      expect:
+        matched: content-folder
+        modType: mortalshell2-contentfolder
+        plan:
+          - ${gamePath}/Config/Unrelated.ini
+
+    # Nexus mods 13 file 20 and 17 file 25 — exact current archives contain only
+    # one top-level Engine.ini. Recognize this strong shape without relocating or
+    # claiming functional support for the payload.
+    - name: "unsupported-engine-ini: Nexus mods 13 and 17 exact flat Engine.ini"
+      archive:
+        - Engine.ini
+      expect:
+        matched: unsupported-engine-ini
+        modType: mortalshell2-unsupported
+        plan:
+          - ${pakModsPath}/Engine.ini
+
+    # Nexus mod 8 file 12 — literal paths from the current 92-entry Electron
+    # remapper archive. Representative leaves span the wrapper root, Chromium
+    # resources, application data, and bundled export tool so root truncation is
+    # observable without mistaking Chromium .pak files for game assets.
+    - name: "unsupported-external-app: Nexus mod 8 exact Electron remapper tree"
+      archive:
+        - Witcher Remapper for Mortal Shell 2 v1.1/Witcher Remapper – Mortal Shell 2.exe
+        - Witcher Remapper for Mortal Shell 2 v1.1/chrome_100_percent.pak
+        - Witcher Remapper for Mortal Shell 2 v1.1/locales/en-US.pak
+        - Witcher Remapper for Mortal Shell 2 v1.1/resources/app.asar
+        - Witcher Remapper for Mortal Shell 2 v1.1/resources/data/IMC_Default_Gamepad.json
+        - Witcher Remapper for Mortal Shell 2 v1.1/resources/witcher_export_tool/MortalShell2.usmap
+      expect:
+        matched: unsupported-external-app
+        modType: mortalshell2-unsupported
+        plan:
+          - ${pakModsPath}/Witcher Remapper for Mortal Shell 2 v1.1/Witcher Remapper – Mortal Shell 2.exe
+          - ${pakModsPath}/Witcher Remapper for Mortal Shell 2 v1.1/chrome_100_percent.pak
+          - ${pakModsPath}/Witcher Remapper for Mortal Shell 2 v1.1/locales/en-US.pak
+          - ${pakModsPath}/Witcher Remapper for Mortal Shell 2 v1.1/resources/app.asar
+          - ${pakModsPath}/Witcher Remapper for Mortal Shell 2 v1.1/resources/data/IMC_Default_Gamepad.json
+          - ${pakModsPath}/Witcher Remapper for Mortal Shell 2 v1.1/resources/witcher_export_tool/MortalShell2.usmap
+
+    # Nexus mod 3 optional file 3 — opaque all-in-one root tree. Installation is
+    # complete-tree only: runtime, consumer mod, signature, and top-level sibling
+    # files remain together without Package 05 ownership/consistency servicing.
+    - name: "root: Nexus mod 3 optional opaque all-in-one keeps complete tree"
+      archive:
+        - MortalShell2/Binaries/Win64/dwmapi.dll
+        - MortalShell2/Binaries/Win64/ue4ss/UE4SS-settings.ini
+        - MortalShell2/Binaries/Win64/ue4ss/UE4SS.dll
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/AutoGoldPickup/enabled.txt
+        - MortalShell2/Binaries/Win64/ue4ss/Mods/AutoGoldPickup/Scripts/main.lua
+        - MortalShell2/Binaries/Win64/ue4ss/UE4SS_Signatures/StaticConstructObject.lua
+        - README.txt
+        - UE4SS_LICENSE.txt
+      expect:
+        matched: root
+        modType: mortalshell2-root
+        plan:
+          - ${installPath}/MortalShell2/Binaries/Win64/dwmapi.dll
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/UE4SS-settings.ini
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/UE4SS.dll
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/AutoGoldPickup/enabled.txt
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/Mods/AutoGoldPickup/Scripts/main.lua
+          - ${installPath}/MortalShell2/Binaries/Win64/ue4ss/UE4SS_Signatures/StaticConstructObject.lua
+          - ${installPath}/README.txt
+          - ${installPath}/UE4SS_LICENSE.txt
