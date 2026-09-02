@@ -1,5 +1,5 @@
 gdl: 1
-version: 0.0.1   # extension version: drives info.json, the release tag, and the zip name
+version: 1.0.0   # extension version: drives info.json, the release tag, and the zip name
 
 # The Blood of Dawnwalker (Rebel Wolves / Bandai Namco): dark-fantasy RPG, Unreal Engine 5.
 # Steam app 3751260; Nexus domain thebloodofdawnwalker (v1 game id 9719).
