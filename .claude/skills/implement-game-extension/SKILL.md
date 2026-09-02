@@ -81,7 +81,9 @@ Read `references/research-recipes.md`, then gather:
   mods" searches) and, if the game is installed locally, by inspecting the Steam install: locate it
   via `libraryfolders.vdf` + `appmanifest_<appid>.acf`, then check for `Engine/`,
   `*/Binaries/Win64/*-Shipping.exe`, `Content/Paks` (`.pak`/`.utoc`/`.ucas` ⇒ UE IoStore), and the
-  exe's version metadata.
+  exe's version metadata. **Record whether IoStore is in use** — it decides
+  `details.supportsSymlinks` in Step 3, and getting it wrong crashes the game for users while every
+  check in this repo stays green.
 - **Store ids** — steam app id, epic `AppName` (egdata), xbox `PackageIdentityName` (displaycatalog),
   each via recipe §2. Steam alone is enough to ship; add epic/xbox only with confirmed ids. Never
   invent an id — omit the store instead.
@@ -119,6 +121,14 @@ The decisions a template *can't* make for you:
   install rather than assuming, and see recipe §2 for fallbacks (UE4 usually has no `global.*`). Do
   **not** list both arch paths: all-must-exist means that breaks both stores. A WinGDK layout is not a
   reason to omit `xbox`.
+- **`game.details.supportsSymlinks`.** If the game's `Content/Paks` holds `.utoc`/`.ucas` it uses
+  UE5 IoStore, and **symlinked pak files crash it** — set `supportsSymlinks: false`. Never write
+  `true`: Vortex only ever tests for `false`, so `true` does nothing while reading like a verified
+  claim (it reached eight game.yaml files here by copy-paste before anyone checked). Templates carry
+  it, so this is a key you must actively fix rather than one you can leave alone. Also check whether
+  any modType targets a path **outside the game folder** (`${appDataLocal}`, Documents) — that
+  removes hardlink and move deployment for the whole game for users whose staging folder is on
+  another drive. See [`docs/deployment-methods.md`](../../../docs/deployment-methods.md).
 - **Whether `src/hooks.ts` is needed** — only if `game.yaml` references a hook (e.g.
   `discovery.version: { hook }` for a non-UTF-8 version file, or `events.did-deploy` for UE4SS
   `mods.txt` regen). Copy and adapt `games/subnautica2/src/hooks.ts`.

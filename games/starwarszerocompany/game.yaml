@@ -1,0 +1,1022 @@
+gdl: 1
+version: 1.0.3   # extension version — drives info.json, the release tag, and the zip name
+
+# Star Wars: Zero Company (Bit Reactor / Electronic Arts) — single-player turn-based tactics.
+# Steam app 2075800; Nexus domain starwarszerocompany (v1 game id 9987 — it was 9861 at
+# scaffold time and CHANGED when the page was approved on 2026-08-27; use 9987).
+#
+# Engine: Unreal Engine 5.6.1, Shipping. Verified 2026-08-30 from a crash report
+# (EngineVersion 5.6.1-196320+++ProjectBruno+Stable), no longer inferred. Logging is
+# compiled out of the Shipping build, so -log and -LogCmds produce no engine log at all;
+# crash dumps under Saved/Crashes are the only engine-side diagnostic.
+# Layout verified on a real Steam install 2026-08-27:
+#   * Install root: SWZeroCompany.exe (the bootstrap Steam launches), SWZeroCompany/,
+#     Engine/. UE project folder is therefore SWZeroCompany — corroborated by the shipped
+#     Manifest_NonUFSFiles_Win64.txt, which lists only Engine/ and SWZeroCompany/ paths.
+#   * Nested exe SWZeroCompany/Binaries/Win64/SWZeroCompany.exe reports the same
+#     FileVersion as the root bootstrap, so either satisfies getGameVersion.
+#   * IoStore enabled: Content/Paks has global.utoc/.ucas + pakchunk<N>-Windows.*.
+#     global.utoc is the marker to use for requiredFiles if a second store is ever added.
+#   * User config: %LOCALAPPDATA%/SWZeroCompany/Saved/Config/Windows, holding only
+#     GameUserSettings.ini (no Engine.ini — hence setup.ensureDirs).
+#
+# A wrong path here breaks every modType destination while the build, unit tests and
+# audit-docs all stay green — only the corpus or a real install catches it. Two earlier
+# guesses at the project folder were both wrong (a Steam dev-branch codename `Bruno`, and
+# `ProjectBruno` from the first mod upload, since fixed by its author), so: don't take the
+# project folder from a beta-branch launch path or a mod archive. Recipe §2.
+#
+# MOD SUPPORT CAVEAT: Bit Reactor Lead Producer Caydence Funk, on EA's own site
+# (ea.com/games/starwars/zero-company/news/answering-biggest-questions): "We have a lot
+# of respect for the modding community, but there is no official mod support planned
+# for Star Wars: Zero Company." That does not stop Vortex supporting the game — most of
+# this repo covers games with no official support — but it does mean the community mod
+# SHAPE is unpredictable. With no sanctioned pak pipeline, mods may skew toward UE4SS
+# and dll injection rather than the pak-heavy distribution these rules assume. Re-check
+# the priority ladder against reality once mods actually appear.
+#
+# Supports (standard UE5 stack, inherited from games/halocampaignevolved): pak mods
+# (Content/Paks/~mods), LogicMods, UE4SS (loader + Lua mods), ReShade presets, loose
+# native DLL plugins, Engine.ini config tweaks, and whole-folder "root" mods.
+# ===============================================================================
+
+game:
+  id: starwarszerocompany
+  name: Star Wars Zero Company   # no colon — see the displayName note in the nexus block below
+  # The root bootstrap Steam itself launches (not the nested Binaries/Win64 exe, which
+  # reports the same version). Scalar rather than a storeBranch: only Steam is declared.
+  executable: SWZeroCompany.exe
+
+  # A discovery fingerprint, not the launch target; every entry must exist (no globs).
+  # The root exe sits outside Binaries/<arch>, so it is arch-neutral. If xbox is added,
+  # switch to SWZeroCompany/Content/Paks/global.utoc rather than listing both arch paths —
+  # all-must-exist would otherwise break every store. Recipe §2.
+  requiredFiles: [SWZeroCompany.exe]
+
+  logo: gameart.webp
+  author: Nexus Mods
+  nexusDomain: starwarszerocompany
+  details:
+    # Must stay false. Symlinked .utoc/.ucas crash the UE5 Zen loader at startup
+    # (EXCEPTION_ACCESS_VIOLATION in FZenPackageHeader::MakeView), reproduced 2026-08-30
+    # with mod 39; the same mod deploys and runs fine under hardlink. Vortex only ever
+    # tests `=== false`, so the previous `true` was a no-op that read like a verified claim.
+    supportsSymlinks: false
+    gameProjectFolder: SWZeroCompany
+    ignoreConflicts: [UE4SS-settings.ini, enabled.txt]
+
+# Steam is the only confirmed store.
+#   steam  — 2075800, confirmed via the Steam storesearch API and appdetails
+#            (name "STAR WARS Zero Company™", Bit Reactor / Electronic Arts).
+#            installdir "Star Wars Zero Company", depot 2075801.
+#   epic   — OMITTED. The sandbox (de33353d9bed419a8b985a46a34d0956) publishes no builds;
+#            its only asset is a 1116-byte pre-purchase stub with artifactId "bruno".
+#            Vortex matches the SHIPPING artifact's manifest AppName, so add nothing until
+#            a build publishes — then re-check egdata (sandbox assets → artifactId,
+#            platform Windows).
+#   xbox   — OMITTED. The game has no Microsoft Store PC listing at all: two separate
+#            storeedgefd v9.0 searches ("Star Wars Zero Company", "Star Wars Zero")
+#            returned only unrelated LEGO/Jedi titles. Nothing to resolve an Identity
+#            Name from. If a Game Pass release appears, note that Xbox needs THREE
+#            values, not one — stores.xbox (Identity Name), game.xboxLauncher
+#            (appExecName) and a WinGDK-aware executable path. See recipe §2.
+stores:
+  steam: "2075800"
+
+context:
+  # Only Steam is declared, so arch has a single arm. Kept as a storeBranch (rather than a
+  # bare `Win64`) so adding an `xbox: WinGDK` arm at release is a one-line change and every
+  # ${arch} path below follows automatically. Engine/Binaries stays Win64 even on Xbox.
+  arch:
+    storeBranch:
+      default: Win64
+
+  # Every path below derives from this, so a wrong value breaks every modType destination
+  # silently. See the header before changing it.
+  gamePath: ${installPath}/SWZeroCompany
+
+  pakModsPath:   ${gamePath}/Content/Paks/~mods
+  logicModsPath: ${gamePath}/Content/Paks/LogicMods
+  paksPath:      ${gamePath}/Content/Paks
+  contentPath:   ${gamePath}/Content
+
+  # UE4SS / ReShade / loose DLL plugins all live next to the shipping exe.
+  binariesPath:  ${gamePath}/Binaries/${arch}
+  ue4ssRootPath: ${gamePath}/Binaries/${arch}/ue4ss
+  ue4ssModsPath: ${gamePath}/Binaries/${arch}/ue4ss/Mods
+
+  # UE reads user config from %LOCALAPPDATA%/<Project>/Saved/Config/<TargetPlatform>, not
+  # the install dir. The leaf varies per game — `Windows` here, but `WindowsClient` or
+  # `WindowsNoEditor` elsewhere — so never copy it to another game unchecked.
+  configPath: ${appDataLocal}/SWZeroCompany/Saved/Config/Windows
+
+modTypes:
+  # Rule 6 (CLAUDE.md): once this game is PUBLISHED, these ids are permanent. Vortex stores
+  # the id against every installed mod, so renaming one orphans users' mods and nothing in
+  # the build, tests or corpus catches it. Rename freely BEFORE first release, never after.
+  - { id: swzc-pak,            name: "Paks (~mods)",               path: "${pakModsPath}" }
+  # Deploys under Content/Paks; the LogicMods/ subfolder rides along in each
+  # file's stripped relative path (so placeAt == this path; see GDL114).
+  - { id: swzc-logicmods,      name: "LogicMods (Blueprint paks)", path: "${paksPath}" }
+  - { id: swzc-ue4ss,          name: "UE4SS (Lua mods)",           path: "${ue4ssModsPath}" }
+  - { id: swzc-ue4ss-injector, name: "UE4SS (loader)",             path: "${binariesPath}" }
+  - { id: swzc-binaries,       name: "Binaries (ReShade / DLL plugins)", path: "${binariesPath}" }
+  - { id: swzc-root,           name: "Root (game folder)",         path: "${installPath}" }
+  - { id: swzc-contentfolder,  name: "Content folder",             path: "${gamePath}" }
+  # Deploys under Content/; the Paks/ subfolder rides along in each file's
+  # stripped relative path (so placeAt == this path; see GDL114).
+  - { id: swzc-pakalt,         name: "Paks (no ~mods)",            path: "${contentPath}" }
+  # deploymentEssential: false is load-bearing. This is the only modType off the game
+  # drive, and Vortex drops a deployment method that can't handle ANY registered modType.
+  # Hardlink and move both require the target on the same volume as the STAGING folder, so
+  # for a game on D: this one path on C: removed both, and 1.0.2 refuses symlink, leaving
+  # users with no deployment method at all (reproduced 2026-08-31). No staging location can
+  # fix that: it would have to be on both volumes at once. `false` demotes the rejection to
+  # a warning.
+  #
+  # It does NOT make config mods deploy cross-volume. For those users an Engine.ini fails
+  # with EXDEV; Vortex catches that per FILE, so every other mod still deploys, but it
+  # reports "Deployment failed - files were locked by external applications", which is the
+  # wrong diagnosis and unactionable. Release notes must say so. See tests/README.md.
+  - { id: swzc-config,         name: "Config (Engine.ini tweaks)", path: "${configPath}",
+      deploymentEssential: false }
+
+installers:
+  # --- Priority 15: UE4SS loader (dwmapi/xinput proxy or UE4SS-settings.ini) → Binaries ---
+  # The `unless` is load-bearing, not defensive. This rule's `take: parent` resolves the
+  # install root to <Project>/Binaries/<arch>, and stripPath drops every file outside that
+  # subtree (gdl/src/runtime/installer-engine.ts:101-151). An archive laid out from the
+  # install root that ships the loader AND other payload (a pak under Content/Paks/, say)
+  # would silently lose everything outside Binaries/. Declining a game-relative archive here
+  # hands it to `root` (16), which deploys the tree intact. This is not hypothetical: it hit
+  # halocampaignevolved mod 68 (Ultra_Plus), which lost a three-file pak triplet that way.
+  # Guarded here before it can bite.
+  - id: ue4ss-injector
+    priority: 15
+    when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    unless:
+      any:
+        - { hasFile: "SWZeroCompany/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: swzc-ue4ss-injector
+
+  # --- Priority 16: Root (game-relative archives laid out from the install root) ---
+  # AFTER the UE4SS loader (so injector packages keep their handling) but BEFORE
+  # logicmods/ue4ss-lua/pak. When an archive is arranged from the install root (top-level
+  # <Project>/ or Engine/), the whole tree deploys as-is, so a MIXED mod (lua under
+  # Binaries/ + a pak under Content/Paks/) lands every file in place instead of ue4ss-lua
+  # claiming it and dropping the pak.
+  - id: root
+    priority: 16
+    when:
+      any:
+        - { hasFile: "SWZeroCompany/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}"
+    modType: swzc-root
+
+  # --- Priority 16.5: the same game-relative tree, wrapped in a folder ---
+  # `root` (16) anchors its `when` at the archive root, so an author who wraps the tree in
+  # a folder — usually the mod's own name — matches NOTHING and installs zero files,
+  # silently. That affected six mods on halocampaignevolved (102, 126, 146, 147, 169, 202),
+  # so it is included here from the start rather than waiting to be bitten.
+  #
+  # `copy: {stripCommonRoot: true}` is deliberate, not interchangeable with a directory
+  # anchor. Two properties matter:
+  #   - It keeps files OUTSIDE the game tree (a wrapped README), which a
+  #     `**/<Project>/` anchor with `take: self` would silently drop.
+  #   - A single anchor cannot span both <Project>/ and Engine/ — it keeps one and drops
+  #     the other — whereas the whole-archive copy keeps both.
+  # It also self-guards multi-variant archives (sibling wrappers each holding a full tree):
+  # with no single common root there is nothing to strip, so the variants deploy verbatim
+  # as folders the game ignores. Inert and visible beats collapsing several variants onto
+  # one set of destinations. The DSL cannot count sibling directories, so this is the only
+  # available guard — and the right outcome regardless.
+  - id: wrapped-root
+    priority: 16.5
+    when:
+      all:
+        - any:
+            - { hasFile: "**/SWZeroCompany/**" }
+            - { hasFile: "**/Engine/**" }
+        - not: { hasFile: "SWZeroCompany/**" }
+        - not: { hasFile: "Engine/**" }
+    copy: { stripCommonRoot: true }
+    modType: swzc-root
+
+  # --- Priority 17: Content folder (project-relative trees: Content/, Config/, Binaries/) ---
+  # Sibling of `root` for archives laid out from the project folder rather than the install
+  # root. The whole tree deploys to ${gamePath}, so a bare Binaries/ tree correctly lands
+  # under the project folder.
+  - id: content-folder
+    priority: 17
+    when:
+      any:
+        - { hasFile: "Content/**" }
+        - { hasFile: "Config/**" }
+        - { hasFile: "Binaries/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${gamePath}"
+    modType: swzc-contentfolder
+
+  # --- Priority 18: ReShade preset (ReShade.ini, strip wrapper) → Binaries ---
+  - id: reshade
+    priority: 18
+    when: { hasFile: "**/ReShade.ini" }
+    unless: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/ReShade.ini"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: swzc-binaries
+
+  # --- Priority 19: Engine.ini config tweak → %LOCALAPPDATA% Saved/Config ---
+  # A bare Engine.ini that UE reads from the USER config dir, not the install dir. This was
+  # the single most common mod category on halocampaignevolved (5 of 38 mods), which is why
+  # it is scaffolded in up front rather than added reactively — install-dir-shaped rules
+  # copied from a pak-only template miss it entirely.
+  # Authors ship both spellings, hence the case-varied brace match.
+  # The `unless` arms exclude archives carrying real payload (paks / utoc / dlls / lua /
+  # game-relative trees), so a mod bundling a config ALONGSIDE a pak keeps its own routing
+  # instead of being reduced to a config drop. tests.cases asserts that guard directly.
+  # The brace list covers the UE user-config files an author might ship, in both the
+  # capitalised and lowercase spellings both of which appear in the wild. It is NOT every
+  # .ini: a bare unknown .ini is a ReShade preset far more often than a config tweak, and
+  # is handled by reshade-preset (19.5). Real mods behind each name:
+  #   Engine.ini — mods 2, 7, 20;  game.ini — mod 16 (Force PS5 controller icons, whose
+  #   own instructions say to drop it in %LOCALAPPDATA%/SWZeroCompany/Saved/Config/Windows).
+  # GameUserSettings.ini is included because the game writes it there, so a mod shipping a
+  # preconfigured one belongs in the same place.
+  - id: config-ini
+    priority: 19
+    when:
+      hasFile: "**/{Engine.ini,engine.ini,Game.ini,game.ini,GameUserSettings.ini,gameusersettings.ini,Input.ini,input.ini,Scalability.ini,scalability.ini}"
+    unless:
+      any:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/*.utoc" }
+        - { hasFile: "**/*.dll" }
+        - { hasFile: "**/*.lua" }
+        - { hasFile: "SWZeroCompany/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/{Engine.ini,engine.ini,Game.ini,game.ini,GameUserSettings.ini,gameusersettings.ini,Input.ini,input.ini,Scalability.ini,scalability.ini}"
+    take: parent
+    placeAt: "${configPath}"
+    modType: swzc-config
+
+  # NOTE: an archive shaped `Config/Engine.ini` routes to content-folder (17, lower number
+  # wins) and lands in <Project>/Config/, NOT the user config dir. That is correct for a
+  # project-relative archive. Revisit only if a real mod ships that shape.
+
+  # --- Priority 19.5: bare ReShade PRESET .ini (not ReShade.ini itself) → Binaries ---
+  # `reshade` (18) only matches the literal ReShade.ini. Authors routinely publish just the
+  # preset, named after the preset itself — real mod 12 ships a lone
+  # `ZeroCompanyReshadeByScottyus1.ini`, which matched nothing before this rule. ReShade
+  # reads presets from next to the injector dll, so Binaries is the right destination.
+  #
+  # AFTER config-ini (19) deliberately: an Engine.ini must keep its user-config routing,
+  # and this rule would otherwise steal it. The `unless` arms drop archives carrying real
+  # payload (an .ini shipped alongside a pak/dll/lua belongs with that payload) and
+  # game-relative trees, which `root` handles. Deliberately NOT matching every stray .ini
+  # in a payload archive is the point — a README-adjacent settings file is not a preset.
+  - id: reshade-preset
+    priority: 19.5
+    when: { hasFile: "**/*.ini" }
+    unless:
+      any:
+        - { hasFile: "**/{Engine.ini,engine.ini,Game.ini,game.ini,GameUserSettings.ini,gameusersettings.ini,Input.ini,input.ini,Scalability.ini,scalability.ini}" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/*.utoc" }
+        - { hasFile: "**/*.dll" }
+        - { hasFile: "**/*.lua" }
+        - { hasFile: "**/SWZeroCompany/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/*.ini"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: swzc-binaries
+
+  # --- Priority 20: LogicMods (Blueprint paks under LogicMods/) → Content/Paks ---
+  - id: logicmods
+    priority: 20
+    when: { hasFile: "**/LogicMods/**" }
+    anchor: "**/LogicMods/"
+    take: self
+    placeAt: "${paksPath}"
+    modType: swzc-logicmods
+
+  # --- Priority 22: UE4SS Lua (Scripts/*.lua present) → ue4ss/Mods ---
+  - id: ue4ss-lua
+    priority: 22
+    when: { hasFile: "**/Scripts/*.lua" }
+    unless: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/Scripts/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: swzc-ue4ss
+
+  # --- Priority 23: UE4SS Lua (enabled.txt only) → ue4ss/Mods ---
+  - id: ue4ss-lua-enabled
+    priority: 23
+    when: { hasFile: "**/enabled.txt" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/enabled.txt"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: swzc-ue4ss
+
+  # --- Priority 24: UE4SS Lua (bare .lua, no Scripts/ dir) → ue4ss/Mods ---
+  - id: ue4ss-lua-bare
+    priority: 24
+    when: { hasFile: "**/*.lua" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: swzc-ue4ss
+
+  # --- Priority 27: Loose native DLL plugin (e.g. winmm/dll-injector mods) → Binaries ---
+  - id: native-dll
+    priority: 27
+    when: { hasFile: "**/*.dll" }
+    unless:
+      any:
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/ue4ss/**" }
+        - { hasFile: "**/ReShade.ini" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/SWZeroCompany/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/*.dll"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: swzc-binaries
+
+  # --- Priority 28: A Paks/ folder bundled in the archive (not ~mods) → Content/Paks ---
+  - id: pak-alt
+    priority: 28
+    when:
+      all:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Paks/**" }
+    unless:
+      any:
+        - { hasFile: "**/~mods/**" }
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/SWZeroCompany/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/Paks/"
+    take: self
+    placeAt: "${contentPath}"
+    modType: swzc-pakalt
+
+  # --- Priority 29: IO Store mod (utoc/ucas without a .pak) → ~mods ---
+  # UE5 defaults to IoStore, so utoc/ucas-only mods are expected here. A mod carrying BOTH
+  # a .pak and a .utoc routes to `pak` (30) instead — this rule's `unless: **/*.pak`
+  # excludes it — which keeps the triplet together. tests.cases pins that ordering.
+  - id: pak-iostore
+    priority: 29
+    when: { hasFile: "**/*.utoc" }
+    unless:
+      any:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/SWZeroCompany/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+        - { hasFile: "**/LogicMods/**" }
+    anchor: "**/*.utoc"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: swzc-pak
+
+  # --- Priority 30: Default pak mod → flatten into ~mods ---
+  - id: pak
+    priority: 30
+    when: { hasFile: "**/*.pak" }
+    unless:
+      any:
+        - { hasFile: "**/SWZeroCompany/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+        - { hasFile: "**/LogicMods/**" }
+    anchor: "**/*.pak"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: swzc-pak
+
+setup:
+  ensureDirs:
+    - ${pakModsPath}
+    # The user-config dir must be created too: UE only writes it on first launch, and the
+    # game does not ship Engine.ini at all (verified on Meteorite and Subnautica2 — both
+    # have only GameUserSettings.ini there). Deploying a config mod before first launch
+    # would otherwise hit a missing target: the "Deployment target unknown" failure fixed
+    # for games/paralives in 1.3.1. Any deploy target outside the install dir needs this.
+    - ${configPath}
+    # UE4SS Lua mods (ue4ss-lua, ue4ss-lua-enabled, ue4ss-lua-bare → swzc-ue4ss) deploy
+    # here, but nothing creates it: the game ships no Binaries/<arch>/ue4ss, and UE4SS only
+    # creates Mods/ once its loader is installed. This does NOT make UE4SS work — the
+    # loader is still required — it only stops the deploy failing.
+    - ${ue4ssModsPath}
+
+toolbarActions:
+  - id: open-ue4ss-settings
+    title: Open UE4SS Settings INI
+    priority: 200
+    target: { openFile: "${ue4ssRootPath}/UE4SS-settings.ini" }
+
+  - id: open-nexus-page
+    title: Open Nexus Page
+    priority: 201
+    target: { openUrl: "https://www.nexusmods.com/starwarszerocompany" }
+
+nexus:
+  modId: 2174            # nexusmods.com/site/mods/2174 (the Vortex extension page)
+  # Confirmed present via v1 (/games/site/mods/2174.json → mod_id 2174, game_id 2295).
+  # The page is still status "not_published" / available: false, which is expected for an
+  # unreleased extension — it does not block building or packaging, only publishing.
+  fileGroupId: 7829331
+  # fileGroupId is NOT verifiable through the v1 API until a file is uploaded
+  # (/files.json currently returns zero files and no group ids), so this value comes from
+  # the maintainer reading it off the Nexus upload page — the route recipe §4 prescribes.
+  # Re-check it against the upload page if publishing ever 404s on the file group.
+  #
+  # NO COLON in displayName. The Nexus mod-file-version API validates against
+  # ^[a-zA-Z0-9 _'().-]+$ and 422s on a colon, so "Star Wars: Zero Company …" fails to
+  # publish even though the game's official name has one. game.name above drops the colon
+  # for the same reason.
+  displayName: "Star Wars Zero Company Support for Vortex"
+
+# ---------------------------------------------------------------------------------------
+# CORPUS STATE: 29/30 archives matched, 18 validators passing (2026-08-29, verified by
+# running it). The catalogue went 1 -> 6 -> 30 mods in the two days after release.
+#
+# Category spread, which is the useful signal for anyone changing the ladder:
+#   pak / pak triplets ..... 8  (17, 18, 21, 22, 23, 27, 30, 37, 39)
+#   UE4SS lua .............. 7  (3, 14, 19, 25, 33, 36, 40 + 34, 38 via enabled.txt)
+#   config-ini ............. 4  (2, 7, 16, 20)
+#   root / wrapped-root .... 5  (1, 10, 11, 24, 26 — localisations ship whole trees)
+#   reshade-preset ......... 1  (12)
+#   ue4ss-injector ......... 1  (9)
+# Paks and UE4SS lua dominate, as the halocampaignevolved-derived ladder assumed, but
+# Engine.ini-style config tweaks remain a steady seam and localisation mods favour
+# game-relative trees. Nothing has needed a new modType.
+#
+# ONE ROUTING BUG WAS FOUND AND FIXED HERE (it shipped in 1.0.0): mod 16 "Force PS5
+# controller icons" ships a bare `game.ini`, which reshade-preset (19.5) swallowed into
+# Binaries/ because any unknown .ini looks like a preset. UE reads game.ini from the USER
+# config dir. config-ini (19) now matches the full set of UE user-config filenames and
+# reshade-preset excludes them; both brace lists must stay in sync, and tests.cases pins
+# mod 16 and the Engine.ini guard so they cannot drift apart again.
+#
+# mod 8 (CustomSplashScreens) is left unmatched DELIBERATELY. It ships ten alternative
+# .bmp files and its own instructions say to pick one, copy it to
+# SWZeroCompany/Content/Splash/ and RENAME it to Splash.bmp. Auto-deploying all ten would
+# put files the game never reads into the splash folder while looking like a successful
+# install. Declining is the honest outcome — a manual-choice variant pack, the legitimate
+# non-match described in docs/corpus-manifests.md. Revisit only if it is repackaged as one
+# file per download.
+#
+# Running it — `--fetch` alone is NOT enough. It resolves the domain but 404s on
+# UUID-style file uris (the Nexus manifest outage, docs/corpus-manifests.md), then prints
+# "nothing to do" and Nx reports SUCCESS: a vacuous pass. Use the listing tool instead:
+#     node tools/corpus/list-archive.mjs --domain starwarszerocompany --game-id 9987 \
+#       --all --out games/starwarszerocompany/tests/cache
+#     pnpm nx run starwarszerocompany:test-corpus
+# Reconcile the summary's `T total` against the v1 `mods` count before believing it (T
+# counts archives, and can exceed `mods` when a mod has several files). The cache is
+# gitignored and keyed by file id, so clear it before re-listing after a mod updates — a
+# stale entry routes the OLD archive and looks fine.
+#
+# A `matched` line is NOT proof of correct routing — mod 16 matched a rule happily while
+# being wrong. Spot-check destinations against the mod's own install instructions.
+# ---------------------------------------------------------------------------------------
+
+# Corpus validators: checked against real Nexus archives by the corpus run. None fire yet
+# (the only published mod matches nothing), so "validators: 0 total" is expected. They
+# encode the intended routing so a future rule change cannot regress it unnoticed.
+validators:
+  - id: injector-validator
+    name: UE4SS loader archives (dwmapi/xinput/UE4SS-settings.ini) match ue4ss-injector
+    # Game-relative loader bundles are claimed by `root` by design (installer 15), so they
+    # are excluded here — pak-payload-placement covers their payload instead.
+    when:
+      all:
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "SWZeroCompany/**" }
+        - not: { hasFile: "Engine/**" }
+    assert: { matched: ue4ss-injector }
+
+  - id: reshade-validator
+    name: ReShade presets (ReShade.ini, no loader) match reshade
+    when:
+      all:
+        - { hasFile: "**/ReShade.ini" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    assert: { matched: reshade }
+
+  - id: reshade-preset-validator
+    name: Bare preset .ini archives (no Engine.ini, no payload) match reshade-preset
+    when:
+      all:
+        - { hasFile: "**/*.ini" }
+        - not: { hasFile: "**/{Engine.ini,engine.ini,Game.ini,game.ini,GameUserSettings.ini,gameusersettings.ini,Input.ini,input.ini,Scalability.ini,scalability.ini}" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "**/ReShade.ini" }
+        - not: { hasFile: "**/*.pak" }
+        - not: { hasFile: "**/*.utoc" }
+        - not: { hasFile: "**/*.dll" }
+        - not: { hasFile: "**/*.lua" }
+        - not: { hasFile: "**/SWZeroCompany/**" }
+        - not: { hasFile: "**/Engine/**" }
+        - not: { hasFile: "**/Binaries/**" }
+    assert: { matched: reshade-preset }
+
+  - id: logicmods-validator
+    name: LogicMods paks (not loader / game- or project-relative trees) match logicmods
+    # The not-arms exclude shapes that HIGHER-priority installers legitimately claim ahead
+    # of logicmods (20): the UE4SS loader (15), game-relative trees via root (16), wrapped
+    # trees via wrapped-root (16.5) — `**/SWZeroCompany/**` covers the root-level form too —
+    # project-relative trees via content-folder (17). Without them this validator would
+    # and would otherwise false-fail on a correctly routed
+    # `SWZeroCompany/Content/Paks/LogicMods/…` archive.
+    # (halocampaignevolved's equivalent validator has no such arms and got away with it
+    # only because no such shape existed in its corpus.)
+    when:
+      all:
+        - { hasFile: "**/LogicMods/**/*.pak" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "**/SWZeroCompany/**" }
+        - not: { hasFile: "**/Engine/**" }
+        - not: { hasFile: "Content/**" }
+        - not: { hasFile: "Config/**" }
+        - not: { hasFile: "Binaries/**" }
+    assert: { matched: logicmods }
+
+  - id: config-validator
+    name: Bare Engine.ini archives (no payload) match config-ini
+    when:
+      all:
+        - { hasFile: "**/{Engine.ini,engine.ini}" }
+        - not: { hasFile: "**/*.pak" }
+        - not: { hasFile: "**/*.utoc" }
+        - not: { hasFile: "**/*.dll" }
+        - not: { hasFile: "**/*.lua" }
+        - not: { hasFile: "SWZeroCompany/**" }
+        - not: { hasFile: "Engine/**" }
+    assert: { matched: config-ini }
+
+  # Placement guard: regardless of which pak installer wins, IoStore pak payloads must land
+  # under Content/Paks and never loose at the game-folder root (a .ucas at the root is
+  # silently ignored by UE and is a common mis-route). This also catches a payload class
+  # vanishing from the plan entirely, which is how the halo mod-68 pak-dropping bug
+  # surfaced.
+  - id: pak-payload-placement
+    name: .pak/.ucas/.utoc install under Content/Paks, never at the game root
+    when: { hasFile: "**/*.{pak,ucas,utoc}" }
+    assert:
+      placement:
+        - files: "**/*.{pak,ucas,utoc}"
+          mustMatch: "**/Content/Paks/**"
+          mustNotMatch: "${installPath}/*"
+
+tests:
+  corpus: nexus
+  # The cases marked REAL SHAPE are verbatim listings from the corpus (see the
+  # corpus-state note). The rest are synthetic — shapes borrowed from other UE5 games in
+  # this repo (halocampaignevolved, outward2, solarpunk) covering categories nobody has
+  # published for this game yet. Both verify rule WIRING: priority ordering,
+  # unless-guards, path flattening.
+  cases:
+    # REAL SHAPE — Nexus mod 1 "Skip Bitreactor Startup Intro", file 2 (v2, 2026-08-27).
+    # Verbatim archive listing from the corpus. A startup-movie replacement: all nine files
+    # overwrite movies that really ship in Content/Movies (each checked against the install),
+    # and the game-relative tree means `root` (16) deploys them intact.
+    # Note for later: the first mod for this game is media, not a pak — don't assume the
+    # pak-heavy ladder below is what this community will mostly ship.
+    - name: "root: real mod 1 v2 — startup-movie replacement deploys verbatim"
+      archive:
+        - SWZeroCompany/Content/Movies/Logo_Startup_1080.bk2
+        - SWZeroCompany/Content/Movies/Logo_Startup_1080.mp4
+        - SWZeroCompany/Content/Movies/Logo_Startup_1080_reprocessed.bk2
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_EA_LFG_1080x1920.bk2
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_EA_LFG_1080x1920.mp4
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080.bk2
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080.mp4
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080_v2.bk2
+        - SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080_v2.mp4
+      expect:
+        matched: root
+        modType: swzc-root
+        plan:
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_1080.bk2
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_1080.mp4
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_1080_reprocessed.bk2
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_EA_LFG_1080x1920.bk2
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_EA_LFG_1080x1920.mp4
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080.bk2
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080.mp4
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080_v2.bk2
+          - ${installPath}/SWZeroCompany/Content/Movies/Logo_Startup_BR_RS_EA_LFG_1080_v2.mp4
+
+    # REAL SHAPE — mod 9 "UE4SS for Star Wars Zero Company" (v1.0). The stock UE4SS bundle:
+    # dwmapi.dll proxy at the archive root next to a ue4ss/ tree. Abridged to the structural
+    # files (the real archive has 23); the point is that the whole tree lands in Binaries/,
+    # including the nested Mods/*/Scripts/*.lua, rather than ue4ss-lua (22) claiming the lua
+    # and dropping the loader.
+    - name: "ue4ss-injector: real mod 9 — stock UE4SS bundle into Binaries"
+      archive:
+        - dwmapi.dll
+        - README.txt
+        - ue4ss/UE4SS.dll
+        - ue4ss/UE4SS-settings.ini
+        - ue4ss/Mods/mods.txt
+        - ue4ss/Mods/BPModLoaderMod/Scripts/main.lua
+      expect:
+        matched: ue4ss-injector
+        modType: swzc-ue4ss-injector
+        plan:
+          - ${binariesPath}/dwmapi.dll
+          - ${binariesPath}/README.txt
+          - ${binariesPath}/ue4ss/UE4SS.dll
+          - ${binariesPath}/ue4ss/UE4SS-settings.ini
+          - ${binariesPath}/ue4ss/Mods/mods.txt
+          - ${binariesPath}/ue4ss/Mods/BPModLoaderMod/Scripts/main.lua
+
+    # REAL SHAPE — mods 2 ("Faster Loading") and 7 ("Lossless Engine Tweaks"), both a lone
+    # Engine.ini at the archive root. Two of the six mods published on day one are this
+    # shape, which is why config-ini exists at all; a pak-only template would drop both.
+    - name: "config-ini: real mods 2/7 — bare Engine.ini to the user config dir"
+      archive:
+        - Engine.ini
+      expect:
+        matched: config-ini
+        modType: swzc-config
+        plan:
+          - ${configPath}/Engine.ini
+
+    # REAL SHAPE — mod 12 "Zero Company Reshade": a lone preset .ini named after itself, NOT
+    # ReShade.ini, so the `reshade` rule (18) misses it. This is what reshade-preset (19.5)
+    # was added for.
+    - name: "reshade-preset: real mod 12 — bare preset ini into Binaries"
+      archive:
+        - ZeroCompanyReshadeByScottyus1.ini
+      expect:
+        matched: reshade-preset
+        modType: swzc-binaries
+        plan:
+          - ${binariesPath}/ZeroCompanyReshadeByScottyus1.ini
+
+    # REAL SHAPE — mod 16 "Force PS5 controller icons": a bare lowercase `game.ini`. Its
+    # author's instructions say to drop it in %LOCALAPPDATA%/SWZeroCompany/Saved/Config/
+    # Windows, i.e. the user config dir, NOT Binaries. This case exists because
+    # reshade-preset (19.5) originally swallowed it — any bare .ini looks like a preset —
+    # and it shipped mis-routed in 1.0.0. Both rules' brace lists must keep agreeing.
+    - name: "config-ini: real mod 16 — bare game.ini to the user config dir"
+      archive:
+        - game.ini
+      expect:
+        matched: config-ini
+        modType: swzc-config
+        plan:
+          - ${configPath}/game.ini
+
+    # REAL SHAPE — mod 34 "ZCUnlocked": a UE4SS mod folder keyed by enabled.txt, whose
+    # payload is a dll rather than lua, so ue4ss-lua (22) does not see it. Confirms
+    # ue4ss-lua-enabled (23) claims it and the dlls/ subfolder rides along.
+    - name: "ue4ss-lua-enabled: real mod 34 — enabled.txt + dll payload into ue4ss/Mods"
+      archive:
+        - ue4ss/Mods/ZCUnlocked/enabled.txt
+        - ue4ss/Mods/ZCUnlocked/dlls/main.dll
+        - README.txt
+      expect:
+        matched: ue4ss-lua-enabled
+        modType: swzc-ue4ss
+
+    # REAL SHAPE — mod 11 "Thai Mod": the whole game tree wrapped in a version-named folder,
+    # carrying an asi loader, a dsound proxy AND a pak triplet. Exactly the case
+    # wrapped-root (16.5) exists for — `root` anchors at the archive root and would match
+    # nothing here, installing zero files silently.
+    - name: "wrapped-root: real mod 11 — wrapped tree with loader + paks keeps every file"
+      archive:
+        - STAR_WARS_Zero_Company_Thai_Mod_v1.2/README_TH.txt
+        - STAR_WARS_Zero_Company_Thai_Mod_v1.2/SWZeroCompany/Binaries/Win64/dsound.dll
+        - STAR_WARS_Zero_Company_Thai_Mod_v1.2/SWZeroCompany/Content/Paks/ThaiFont_P.pak
+      expect:
+        matched: wrapped-root
+        modType: swzc-root
+        plan:
+          - README_TH.txt
+          - SWZeroCompany/Binaries/Win64/dsound.dll
+          - SWZeroCompany/Content/Paks/ThaiFont_P.pak
+
+    # REAL SHAPE — mod 39 "Classes Unlocked": several numbered pak triplets in one archive,
+    # flattened into ~mods together. Load order is carried by the 010_/020_ filename
+    # prefixes, so flattening must not disturb them.
+    - name: "pak: real mod 39 — multiple numbered triplets flatten into ~mods"
+      archive:
+        - 010_classes_unlocked_P.pak
+        - 010_classes_unlocked_P.ucas
+        - 010_classes_unlocked_P.utoc
+        - 020_classes_picker_P.pak
+        - 020_classes_picker_P.ucas
+        - 020_classes_picker_P.utoc
+      expect:
+        matched: pak
+        modType: swzc-pak
+        plan:
+          - ${pakModsPath}/010_classes_unlocked_P.pak
+          - ${pakModsPath}/010_classes_unlocked_P.ucas
+          - ${pakModsPath}/010_classes_unlocked_P.utoc
+          - ${pakModsPath}/020_classes_picker_P.pak
+          - ${pakModsPath}/020_classes_picker_P.ucas
+          - ${pakModsPath}/020_classes_picker_P.utoc
+
+    # GUARD — reshade-preset (19.5) must NOT steal an Engine.ini from config-ini (19).
+    # Both are bare .ini archives; only priority and the `unless` arm separate them.
+    # Removing either must fail this case.
+    - name: "reshade-preset guard: Engine.ini stays with config-ini"
+      archive:
+        - Engine.ini
+      expect:
+        matched: config-ini
+        modType: swzc-config
+
+    # REAL SHAPE — mod 10 "No-Intro-Splash": a MIXED game-relative archive (pak triplet +
+    # a splash bmp + a loose README). Exactly what `root` (16) protects — any of the pak
+    # rules would take the triplet and silently drop the bmp and README. The README lands in
+    # the game folder, which is inert and visible; that beats losing the splash file.
+    - name: "root: real mod 10 — mixed pak triplet + splash + readme deploys intact"
+      archive:
+        - ReadMe.txt
+        - SWZeroCompany/Content/Paks/~mods/No-Intro_P.pak
+        - SWZeroCompany/Content/Paks/~mods/No-Intro_P.ucas
+        - SWZeroCompany/Content/Paks/~mods/No-Intro_P.utoc
+        - SWZeroCompany/Content/Splash/Splash.bmp
+      expect:
+        matched: root
+        modType: swzc-root
+        plan:
+          - ${installPath}/ReadMe.txt
+          - ${installPath}/SWZeroCompany/Content/Paks/~mods/No-Intro_P.pak
+          - ${installPath}/SWZeroCompany/Content/Paks/~mods/No-Intro_P.ucas
+          - ${installPath}/SWZeroCompany/Content/Paks/~mods/No-Intro_P.utoc
+          - ${installPath}/SWZeroCompany/Content/Splash/Splash.bmp
+
+    # === ILLUSTRATIVE SHAPES (borrowed from other UE5 games — see the NOTE above) ===
+    # --- UE4SS loader ---
+    - name: "ue4ss-injector: dwmapi.dll + ue4ss tree dropped into Binaries"
+      archive:
+        - dwmapi.dll
+        - tbb12.dll
+        - ue4ss/UE4SS-settings.ini
+        - ue4ss/Mods/keep_me.txt
+      expect:
+        matched: ue4ss-injector
+        modType: swzc-ue4ss-injector
+        plan:
+          - ${binariesPath}/dwmapi.dll
+          - ${binariesPath}/tbb12.dll
+          - ${binariesPath}/ue4ss/UE4SS-settings.ini
+          - ${binariesPath}/ue4ss/Mods/keep_me.txt
+
+    # GUARD CASE — PINS inherited template behavior (halocampaignevolved has the same
+    # guard shape): a FLAT loader archive carrying a stray pak is claimed whole by
+    # ue4ss-injector (15), whose `unless` declines only game-relative trees — so the pak
+    # lands, inert, in Binaries/ rather than Content/Paks. No flat loader+pak mod has been
+    # seen in any corpus; the pak-payload-placement validator will flag one loudly if it
+    # ever appears. If that happens, decide the routing deliberately and update this case —
+    # note the naive fix (an `unless: **/*.pak` arm here) would instead hand the LOADER to
+    # `pak` (30) and misroute it into ~mods, which is no better.
+    - name: "ue4ss-injector: flat loader archive with a stray pak is taken whole (pinned)"
+      archive:
+        - dwmapi.dll
+        - UE4SS-settings.ini
+        - Stray_P.pak
+      expect:
+        matched: ue4ss-injector
+        modType: swzc-ue4ss-injector
+        plan:
+          - ${binariesPath}/dwmapi.dll
+          - ${binariesPath}/UE4SS-settings.ini
+          - ${binariesPath}/Stray_P.pak
+
+    # --- ReShade preset ---
+    - name: "reshade: preset folder stripped into Binaries"
+      archive:
+        - WarmSun/ReShade.ini
+        - WarmSun/WarmSun.ini
+        - WarmSun/reshade-shaders/Shaders/Clarity.fx
+      expect:
+        matched: reshade
+        modType: swzc-binaries
+        plan:
+          - ${binariesPath}/ReShade.ini
+          - ${binariesPath}/WarmSun.ini
+          - ${binariesPath}/reshade-shaders/Shaders/Clarity.fx
+
+    # --- Loose native DLL plugin ---
+    - name: "native-dll: bare dll placed in Binaries"
+      archive:
+        - SomePlugin.dll
+      expect:
+        matched: native-dll
+        modType: swzc-binaries
+        plan:
+          - ${binariesPath}/SomePlugin.dll
+
+    # --- UE4SS Lua ---
+    - name: "ue4ss-lua: lua mod with Scripts folder"
+      archive:
+        - MyMod/Scripts/main.lua
+        - MyMod/enabled.txt
+      expect:
+        matched: ue4ss-lua
+        modType: swzc-ue4ss
+        plan:
+          - ${ue4ssModsPath}/MyMod/Scripts/main.lua
+          - ${ue4ssModsPath}/MyMod/enabled.txt
+
+    # --- LogicMods ---
+    - name: "logicmods: paks under LogicMods/ folder"
+      archive:
+        - Pack/LogicMods/BPFolder/X.pak
+      expect:
+        matched: logicmods
+        modType: swzc-logicmods
+        plan:
+          - ${paksPath}/LogicMods/BPFolder/X.pak
+
+    # --- Config tweaks (the category a pak-only template misses entirely) ---
+    - name: "config-ini: bare Engine.ini lands in the user config dir, not the install dir"
+      archive:
+        - Engine.ini
+      expect:
+        matched: config-ini
+        modType: swzc-config
+        plan:
+          - ${configPath}/Engine.ini
+
+    - name: "config-ini: lowercase engine.ini in a named wrapper folder is stripped"
+      archive:
+        - Smooth Framerate/engine.ini
+        - Smooth Framerate/README.txt
+      expect:
+        matched: config-ini
+        modType: swzc-config
+        plan:
+          - ${configPath}/engine.ini
+          - ${configPath}/README.txt
+
+    # GUARD CASE — asserts the config-ini `unless: **/*.pak` arm. Without that arm this
+    # archive would be reduced to a config drop and the pak silently lost. Removing the
+    # guard must fail this test.
+    - name: "config-ini guard: Engine.ini bundled WITH a pak keeps its pak routing"
+      archive:
+        - MyMod/Engine.ini
+        - MyMod/MyMod_P.pak
+      expect:
+        matched: pak
+        modType: swzc-pak
+        plan:
+          - ${pakModsPath}/MyMod_P.pak
+          - ${pakModsPath}/Engine.ini
+
+    # --- Pak mods ---
+    - name: "pak: single pak file flattened to ~mods"
+      archive:
+        - SomeMod/Cool.pak
+      expect:
+        matched: pak
+        modType: swzc-pak
+        plan:
+          - ${pakModsPath}/Cool.pak
+
+    # A .pak alongside .utoc/.ucas must route to `pak` (30), NOT `pak-iostore` (29), whose
+    # `unless: **/*.pak` excludes it — keeping the triplet together in one destination.
+    - name: "pak: pak wins over pak-iostore when both present"
+      archive:
+        - Better Stacks/0_BetterStacks_P.pak
+        - Better Stacks/0_BetterStacks_P.ucas
+        - Better Stacks/0_BetterStacks_P.utoc
+      expect:
+        matched: pak
+        modType: swzc-pak
+        plan:
+          - ${pakModsPath}/0_BetterStacks_P.pak
+          - ${pakModsPath}/0_BetterStacks_P.ucas
+          - ${pakModsPath}/0_BetterStacks_P.utoc
+
+    - name: "pak-iostore: utoc+ucas without a pak"
+      archive:
+        - SomeMod/x_P.utoc
+        - SomeMod/x_P.ucas
+      expect:
+        matched: pak-iostore
+        modType: swzc-pak
+        plan:
+          - ${pakModsPath}/x_P.utoc
+          - ${pakModsPath}/x_P.ucas
+
+    - name: "pak-alt: bundled Paks/ folder → Content/Paks"
+      archive:
+        - mod/Paks/sub/x.pak
+        - mod/Paks/sub/x.ucas
+        - mod/Paks/sub/x.utoc
+      expect:
+        matched: pak-alt
+        modType: swzc-pakalt
+        plan:
+          - ${contentPath}/Paks/sub/x.pak
+          - ${contentPath}/Paks/sub/x.ucas
+          - ${contentPath}/Paks/sub/x.utoc
+
+    - name: "content-folder: Content/ at archive root"
+      archive:
+        - Content/Foo.uasset
+        - Content/Bar.uexp
+      expect:
+        matched: content-folder
+        modType: swzc-contentfolder
+        plan:
+          - ${gamePath}/Content/Foo.uasset
+          - ${gamePath}/Content/Bar.uexp
+
+    # --- Game-relative trees ---
+    - name: "root: project folder + Engine segments deploy intact"
+      archive:
+        - SWZeroCompany/Content/Paks/foo.pak
+        - Engine/Content/bar.uasset
+      expect:
+        matched: root
+        modType: swzc-root
+        plan:
+          - ${installPath}/SWZeroCompany/Content/Paks/foo.pak
+          - ${installPath}/Engine/Content/bar.uasset
+
+    # GUARD CASE — asserts the ue4ss-injector `unless` arm. A game-relative archive shipping
+    # BOTH the loader and a pak must go to `root` (16), not ue4ss-injector (15), or the pak
+    # payload outside Binaries/ is silently dropped (the real halo mod-68 failure).
+    - name: "injector guard: game-relative loader + pak deploys intact via root"
+      archive:
+        - SWZeroCompany/Binaries/Win64/dwmapi.dll
+        - SWZeroCompany/Binaries/Win64/ue4ss/UE4SS-settings.ini
+        - SWZeroCompany/Content/Paks/~mods/Payload_P.pak
+      expect:
+        matched: root
+        modType: swzc-root
+        plan:
+          - ${installPath}/SWZeroCompany/Binaries/Win64/dwmapi.dll
+          - ${installPath}/SWZeroCompany/Binaries/Win64/ue4ss/UE4SS-settings.ini
+          - ${installPath}/SWZeroCompany/Content/Paks/~mods/Payload_P.pak
+
+    # GUARD CASE — asserts wrapped-root (16.5). Without it this archive matches NOTHING and
+    # installs zero files, silently (six real mods hit this on halocampaignevolved).
+    # NOTE the plan paths here are modType-relative (swzc-root already resolves to
+    # ${installPath}), unlike the `root` cases above which are written absolute. That is a
+    # property of `copy: {stripCommonRoot: true}`, which emits relative destinations —
+    # matching games/halocampaignevolved. Don't "fix" these into ${installPath}/… form.
+    - name: "wrapped-root: game tree wrapped in a mod-name folder has the wrapper stripped"
+      archive:
+        - Cool Mod v2/SWZeroCompany/Content/Paks/~mods/Cool_P.pak
+        - Cool Mod v2/README.txt
+      expect:
+        matched: wrapped-root
+        modType: swzc-root
+        plan:
+          - README.txt
+          - SWZeroCompany/Content/Paks/~mods/Cool_P.pak
+
+    # GUARD CASE — the converse of the above. A tree ALREADY at the archive root must stay
+    # with `root` (16); wrapped-root must decline it, or stripCommonRoot would eat the
+    # project-folder segment itself and deploy the tree one level too high.
+    - name: "root still wins for an unwrapped tree (wrapped-root declines)"
+      archive:
+        - SWZeroCompany/Content/Paks/~mods/Cool_P.pak
+        - README.txt
+      expect:
+        matched: root
+        modType: swzc-root
+        plan:
+          - ${installPath}/SWZeroCompany/Content/Paks/~mods/Cool_P.pak
+          - ${installPath}/README.txt
