@@ -19,8 +19,8 @@ version: 0.0.1   # extension version: drives info.json, the release tag, and the
 #
 # Supports: pak mods (Content/Paks/~mods), LogicMods, UE4SS (loader + Lua mods), ReShade
 # presets, loose native DLL plugins, Engine.ini config tweaks, whole-folder root mods.
-# Ladder inherited from games/starwarszerocompany. Nothing was published for this game when
-# it was written, so read the CORPUS STATE note before trusting the routing.
+# Ladder inherited from games/starwarszerocompany. Only the ReShade path has routed a real
+# mod so far, so read the CORPUS STATE note before trusting the rest.
 # ===============================================================================
 
 game:
@@ -441,39 +441,36 @@ nexus:
   displayName: The Blood of Dawnwalker Support for Vortex
 
 # ---------------------------------------------------------------------------------------
-# CORPUS STATE (2026-09-01): the corpus CANNOT run. The game has ZERO published mods
-# (`mods: 0` from https://api.nexusmods.com/v1/games/thebloodofdawnwalker.json) because it
-# does not release until 2026-09-03. `pnpm nx run thebloodofdawnwalker:test-corpus --fetch`
-# therefore prints `no archives in tests/cache/ — nothing to do` and EXITS 0. That is the
-# silent-pass trap in docs/corpus-manifests.md, not a passing run, and it is the expected
-# state for this game today.
+# CORPUS STATE (2026-09-03): 1 matched, 0 unmatched, 0 failed, 1 total, reconciled against
+# the one mod published so far. Real coverage, but a single archive of a single category.
 #
-# Consequence: not one installer rule below has ever routed a real archive, and every
-# tests.cases entry is SYNTHETIC (see the note on `cases`). The ladder is inherited from
-# games/starwarszerocompany, where it was tuned against 30 real mods, but that is evidence
-# about Star Wars: Zero Company's mod scene, not this one.
+# --fetch does NOT work for this game. Manifests 404 on the UUID-style file uris (the Nexus
+# outage in docs/corpus-manifests.md), and the run then prints "nothing to do" and EXITS 0
+# with Nx reporting success. Confirmed here, not assumed. Use the listing tool:
+#     node tools/corpus/list-archive.mjs --domain thebloodofdawnwalker --game-id 9719
+#         --all --out games/thebloodofdawnwalker/tests/cache
+#     pnpm nx run thebloodofdawnwalker:test-corpus        # note: NO --fetch
+# Reconcile the summary's `T total` against `mods` from
+# https://api.nexusmods.com/v1/games/thebloodofdawnwalker.json before believing it. The
+# cache is gitignored and keyed by file id, so clear it before re-listing after a mod
+# updates: a stale entry routes the OLD archive and looks fine.
 #
-# What to do once mods appear (worth doing in the first week: starwarszerocompany went
-# 1 → 6 → 30 mods within two days of release):
-#   1. Re-read the real count:  curl -s -H "apikey: $NEXUS_API_KEY" \
-#        https://api.nexusmods.com/v1/games/thebloodofdawnwalker.json | grep -o '"mods":[0-9]*'
-#   2. pnpm nx run thebloodofdawnwalker:test-corpus -- --fetch
-#   3. Reconcile the summary's `T total` against that count. T=0, `0 matched`, or
-#      "nothing to do" are FAILURES. If manifests 404 (expected for uploads after ~11 June
-#      2026), generate listings from the archives instead:
-#        node tools/corpus/list-archive.mjs --domain thebloodofdawnwalker --game-id 9719 \
-#          --all --out games/thebloodofdawnwalker/tests/cache
-#        pnpm nx run thebloodofdawnwalker:test-corpus        # note: NO --fetch
-#   4. Promote every real shape found into tests.cases. The cache is gitignored and CI
-#      never runs the corpus, so those cases are the only durable regression guard.
-#   5. A `matched` line is NOT proof of correct routing. Spot-check destinations against
-#      each mod's own install instructions.
-# Do not assume this ladder is right for this game until step 3 reconciles.
+# Routed so far:
+#   reshade .... 1  (mod 4, Ultra Realistica ReShade)
+#
+# Every other rule is still unexercised, and every tests.cases entry except the mod 4 one is
+# SYNTHETIC. The ladder is inherited from games/starwarszerocompany, tuned against 30 real
+# mods there, which is evidence about that game's mod scene rather than this one. Re-run as
+# mods land and promote each new shape into tests.cases, since the cache is gitignored and
+# CI never runs the corpus.
+#
+# A `matched` line is NOT proof of correct routing. Spot-check destinations against each
+# mod's own install instructions, as was done for mod 4.
 # ---------------------------------------------------------------------------------------
 
-# Corpus validators: checked against real Nexus archives by the corpus run. NONE fire yet
-# (there are no mods), so "validators: 0 total" is the expected output. They encode the
-# intended routing so a future rule change cannot regress it unnoticed.
+# Corpus validators: checked against real Nexus archives by the corpus run. Only
+# reshade-validator has fired so far (mod 4). The rest encode the intended routing so a
+# future rule change cannot regress it unnoticed.
 validators:
   - id: injector-validator
     name: UE4SS loader archives (dwmapi/xinput/UE4SS-settings.ini) match ue4ss-injector
@@ -660,6 +657,23 @@ tests:
         modType: dawnwalker-binaries
         plan:
           - ${binariesPath}/DawnwalkerCinematicPreset.ini
+
+    # REAL SHAPE, and the first mod published for this game: mod 4 "Ultra Realistica
+    # ReShade" by Tobkes. Verbatim listing from the corpus: ReShade.ini plus the named
+    # preset, both at the archive root with no wrapping folder, so nothing is stripped.
+    # Destination checked against the author's own instructions, which tell users to point
+    # ReShade at ...\The Blood of Dawnwalker\Dawnwalker\Binaries\Win64 and drop the preset
+    # beside Dawnwalker.exe. That is binariesPath.
+    - name: "reshade: real mod 4, ReShade.ini + preset at archive root"
+      archive:
+        - ReShade.ini
+        - Ultra Realistica ReShade.ini
+      expect:
+        matched: reshade
+        modType: dawnwalker-binaries
+        plan:
+          - ${binariesPath}/ReShade.ini
+          - ${binariesPath}/Ultra Realistica ReShade.ini
 
     # Shape from solarpunk mod 1 (WarmSun): a preset folder carrying the literal ReShade.ini
     # plus shaders. The wrapping folder is stripped and the tree lands in Binaries/.
