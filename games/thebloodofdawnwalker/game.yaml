@@ -9,7 +9,7 @@ version: 0.0.1   # extension version: drives info.json, the release tag, and the
 #   * Dawnwalker/Binaries/Win64/Dawnwalker.exe, 176,484,216 bytes, OriginalFilename
 #     Dawnwalker-Win64-Shipping.exe. Steam's default-branch launch entry points here.
 #   * IoStore: Content/Paks holds Dawnwalker-Windows.{pak,ucas,utoc} plus global.utoc and
-#     global.ucas.
+#     global.ucas. Hence supportsSymlinks: false below.
 #   * Dawnwalker/ holds only Binaries/ and Content/.
 #   * The exe reports version dw1-pc-256181-shipping-patch2-all-CL-256181, which Vortex
 #     surfaces verbatim. Add a discovery.version hook if version ordering is ever needed.
@@ -42,6 +42,12 @@ game:
   author: Nexus Mods
   nexusDomain: thebloodofdawnwalker
   details:
+    # Required: this game uses IoStore (verified, see header) and symlinked .utoc/.ucas
+    # crash the UE5 Zen loader at startup with EXCEPTION_ACCESS_VIOLATION in
+    # FZenPackageHeader::MakeView. Proven on starwarszerocompany 2026-08-30 by A/B.
+    # Write `false` or omit the key; Vortex only tests `=== false`, so `true` is a no-op
+    # that reads like a verified claim. See docs/deployment-methods.md.
+    supportsSymlinks: false
     gameProjectFolder: Dawnwalker
     ignoreConflicts: [UE4SS-settings.ini, enabled.txt]
 
@@ -107,7 +113,15 @@ modTypes:
   # Deploys under Content/; the Paks/ subfolder rides along in each file's
   # stripped relative path (so placeAt == this path; see GDL114).
   - { id: dawnwalker-pakalt,         name: "Paks (no ~mods)",            path: "${contentPath}" }
-  - { id: dawnwalker-config,         name: "Config (Engine.ini tweaks)", path: "${configPath}" }
+  # deploymentEssential: false keeps hardlink available. This is the only modType off the
+  # game drive, and Vortex drops any method that cannot handle every registered modType, so
+  # for a user whose staging folder is on another volume this one path would otherwise
+  # remove hardlink and move. With supportsSymlinks: false that leaves no method at all
+  # (reproduced on starwarszerocompany 1.0.2). Config mods still fail cross-volume with
+  # EXDEV, which Vortex reports as "files were locked by external applications", so say so
+  # in the release notes. See docs/deployment-methods.md.
+  - { id: dawnwalker-config,         name: "Config (Engine.ini tweaks)", path: "${configPath}",
+      deploymentEssential: false }
 
 installers:
   # --- Priority 15: UE4SS loader (dwmapi/xinput proxy or UE4SS-settings.ini) → Binaries ---
