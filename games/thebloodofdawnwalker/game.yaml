@@ -330,9 +330,15 @@ installers:
     modType: dawnwalker-ue4ss
 
   # --- Priority 27: Loose native DLL plugin (e.g. winmm/dll-injector mods) → Binaries ---
+  # `.addon64` is a ReShade/RenoDX addon, which loads from beside the shipping exe just as a
+  # proxy dll does. Real mods 51 and 52 ship one NEXT TO a .dll so the dll anchored them, but
+  # mod 37 ships `renodx-ue-extended.addon64` alone and matched nothing at all.
   - id: native-dll
     priority: 27
-    when: { hasFile: "**/*.dll" }
+    when:
+      any:
+        - { hasFile: "**/*.dll" }
+        - { hasFile: "**/*.addon64" }
     unless:
       any:
         - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
@@ -343,7 +349,7 @@ installers:
         - { hasFile: "**/Dawnwalker/**" }
         - { hasFile: "**/Engine/**" }
         - { hasFile: "**/Binaries/**" }
-    anchor: "**/*.dll"
+    anchor: "**/*.{dll,addon64}"
     take: parent
     placeAt: "${binariesPath}"
     modType: dawnwalker-binaries
@@ -470,52 +476,57 @@ nexus:
   displayName: The Blood of Dawnwalker Support for Vortex
 
 # ---------------------------------------------------------------------------------------
-# CORPUS STATE (2026-09-03, morning): 32 matched, 1 unmatched, 0 failed, 33 total.
-# The catalogue went 1 -> 34 mods overnight. 33 archives listed; mod 36 returns 403, which is
-# Nexus moderation rather than a coverage gap.
+# CORPUS STATE (2026-09-03, midday): 41 matched, 2 unmatched, 0 failed, 43 total, with 28
+# validators passing and none failing. The catalogue went 1 -> 34 -> 43 mods in a day.
 #
 # Category spread, the useful signal for anyone changing the ladder:
-#   root ............... 14  (17, 19, 20, 23, 25, 27, 32, 34, 38, 39, 40, 44, 46, 50)
-#   pak ................  6  (10, 15, 16, 33, 35, 42)
-#   config-ini .........  4  (6, 31, 47, 49)
-#   native-dll .........  3  (30, 51, 52)
-#   content-relative ...  2  (9, 24)
-#   content-folder .....  1  (21)
-#   ue4ss-injector .....  1  (22)
-#   reshade ............  1  (4)
+#   root ............... 16     content-relative ...  3
+#   pak ................  8     ue4ss-lua ..........  2
+#   config-ini .........  6     content-folder .....  1
+#   native-dll .........  4     ue4ss-injector .....  1
+#   reshade ............  1
 #
-# Two things this catalogue settled that no template could:
-#   * Game-relative archives dominate. 14 of 33 ship a full Dawnwalker/ tree, and several
-#     write straight into Content/Paks/~mods, which is good evidence that ~mods mounts.
-#   * Content-relative archives exist (Paks/ and Movies/ as siblings at the archive root).
+# What this catalogue settled that no template could:
+#   * Game-relative archives dominate, and many write straight into Content/Paks/~mods,
+#     which is good evidence that ~mods mounts.
+#   * Content-relative archives exist (Paks/ and Movies/ siblings at the archive root).
 #     pak-alt anchored on Paks/ and silently dropped the siblings, costing mod 9 its
-#     subtitle file, so content-relative (27.5) was added. See that rule's comment.
+#     subtitle file. Hence content-relative (27.5).
+#   * A bare .addon64 ReShade addon ships with no .dll beside it (mod 37), so native-dll
+#     matches the extension directly rather than relying on a dll to anchor it.
 #
-# mod 43 (DawnwalkerSaveEditor) is left unmatched DELIBERATELY: a standalone .exe save
-# editor, an external tool rather than something to deploy into the game folder. That is a
-# legitimate non-match per docs/corpus-manifests.md.
+# Two mods are unmatched DELIBERATELY, both legitimate per docs/corpus-manifests.md:
+#   mod 43  DawnwalkerSaveEditor.exe, a standalone tool rather than a deployable payload.
+#   mod 54  Dawnwalker_ja/*.bat, scripts the user runs, not files the game loads.
+# Neither should be forced into a modType: deploying them would look like success while
+# achieving nothing.
+#
+# mod 59 ships the SAME pak twice, correctly under Dawnwalker/Content/Paks/~mods and again
+# loose at the archive root. `root` deploys that verbatim, which is right, and
+# pak-payload-placement is narrowed to skip that shape rather than sit permanently red. See
+# the comment on that validator.
 #
 # mod 22 routes via ue4ss-injector on its dwmapi.dll even though it is not UE4SS. The
-# destination (Binaries/Win64) is right, so the outcome is correct and only the modType
-# LABEL reads oddly. Do not rename the id to fix that: ids are permanent once published.
+# destination is right, so only the modType LABEL reads oddly. Do not rename the id: ids
+# are permanent once published.
 #
 # Running it: --fetch does NOT work for this game. Manifests 404 on the UUID-style file
 # uris (the outage in docs/corpus-manifests.md), and the run then prints "nothing to do"
 # and EXITS 0 with Nx reporting success. Use the listing tool, and put 7-Zip on PATH first
-# or .rar/.7z archives are skipped (that hid 3 mods on the first pass):
+# or .rar/.7z archives are skipped, which hid 3 mods on the first pass:
 #     export PATH="/c/Program Files/7-Zip:$PATH"
 #     node tools/corpus/list-archive.mjs --domain thebloodofdawnwalker --game-id 9719
 #         --all --out games/thebloodofdawnwalker/tests/cache
 #     pnpm nx run thebloodofdawnwalker:test-corpus        # note: NO --fetch
 # Reconcile `T total` against `mods` from
-# https://api.nexusmods.com/v1/games/thebloodofdawnwalker.json before believing it. That
-# count also LAGS publication, so cross-check latest_added for available:true. The cache is
-# keyed by file id, so clear it before re-listing or a stale entry routes the OLD archive
-# and looks fine.
+# https://api.nexusmods.com/v1/games/thebloodofdawnwalker.json. That count LAGS
+# publication, so cross-check latest_added for available:true. ALWAYS clear the cache
+# first: it is keyed by file id, so an updated mod leaves the old entry behind and the
+# totals silently inflate (43 mods read as 50 before a clear).
 #
-# A `matched` line is NOT proof of correct routing, and the mod 9 drop proves it: it
-# reported matched while losing a file. Compare the archive's entry count against the
-# routed file count, and spot-check destinations against each mod's own instructions.
+# A `matched` line is NOT proof of correct routing, and mod 9 proves it: it reported
+# matched while losing a file. Compare each archive's entry count against its routed file
+# count, and spot-check destinations against the mod's own instructions.
 # ---------------------------------------------------------------------------------------
 
 # Corpus validators: checked against real Nexus archives by the corpus run. Only
@@ -594,9 +605,22 @@ validators:
   # silently ignored by UE and is a common mis-route). This also catches a payload class
   # vanishing from the plan entirely, which is how the halocampaignevolved mod-68
   # pak-dropping bug surfaced.
+  # Skips game-relative archives that ALSO carry a loose pak at their own root. Real mod 59
+  # ships the same pak twice, once correctly under Dawnwalker/Content/Paks/~mods and once
+  # bare at the archive root. `root` deploys that verbatim, which is correct: the placed copy
+  # works and the stray one is inert, because UE ignores a loose pak at the install root.
+  # The assertion cannot tell that shape from a real mis-route, and leaving it red would
+  # train people to ignore validator failures. Narrowed rather than deleted, so a pak that
+  # lands ONLY at the root is still caught.
   - id: pak-payload-placement
     name: .pak/.ucas/.utoc install under Content/Paks, never at the game root
-    when: { hasFile: "**/*.{pak,ucas,utoc}" }
+    when:
+      all:
+        - { hasFile: "**/*.{pak,ucas,utoc}" }
+        - not:
+            all:
+              - { hasFile: "Dawnwalker/**" }
+              - { hasFile: "*.pak" }
     assert:
       placement:
         - files: "**/*.{pak,ucas,utoc}"
@@ -739,6 +763,17 @@ tests:
           - ${binariesPath}/ReShade.ini
           - ${binariesPath}/CoolPreset.ini
           - ${binariesPath}/reshade-shaders/Shaders/Clarity.fx
+
+    # REAL SHAPE, real mod 37 "BoDw RenoDX UE-Extended": a lone .addon64 with no .dll beside
+    # it. Matched nothing before native-dll's `when` and anchor covered the extension.
+    - name: "native-dll: real mod 37, bare .addon64 with no dll"
+      archive:
+        - renodx-ue-extended.addon64
+      expect:
+        matched: native-dll
+        modType: dawnwalker-binaries
+        plan:
+          - ${binariesPath}/renodx-ue-extended.addon64
 
     # Shape from solarpunk mod 5 (AirshipShare): a single loose plugin dll.
     - name: "native-dll: bare dll placed in Binaries"
