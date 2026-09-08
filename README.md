@@ -20,7 +20,7 @@ gdl-games/
 ├── games/                     # one folder per game — currently 007firstlight,
 │   ├── solarpunk/             #   assassinscreedblackflagresynced, gothic1remake,
 │   │   ├── game.yaml          #   halocampaignevolved, moonlightpeaks, outward2,
-│   │   └── gameart.webp       #   paralives, solarpunk, subnautica2
+│   │   └── gameart.webp       #   paralives, solarpunk, subnautica2, mortalshell2
 │   └── subnautica2/           # games needing custom logic also have:
 │       └── src/hooks.ts       #   version detection / deploy hooks
 ├── docs/corpus-manifests.md   # corpus verification: how it works, fails, and the workaround
