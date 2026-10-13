@@ -1,0 +1,420 @@
+gdl: 1
+version: 1.0.0   # extension version: drives info.json, the release tag, and the zip name
+
+# Planet Zoo 2 (Frontier Developments): zoo management sim on Frontier's in-house Cobra
+# engine. NOT Unreal: there are no paks, no UE4SS and no IoStore here.
+# Steam app 3219030; Nexus domain planetzoo2 (v1 game id 10226).
+#
+# Scaffolded 2026-10-08 before launch; layout verified on a real Steam install at launch,
+# 2026-10-13, buildid 25680674:
+#   * Install root (installdir "Planet Zoo 2") holds PlanetZoo2.exe, FileVersion
+#     1.0.3.1011968, so getGameVersion reports a real version. Steam's default launch
+#     entry (no betakey) also names PlanetZoo2.exe. Beta-branch entries name
+#     Wallace.*.exe, an internal codename: ignore those (recipe §2).
+#   * Win64/ovldata exists and holds the base game's own packs: Content0 (with a
+#     Manifest.xml, the same pack format as the Cobra siblings), Content_Localised and
+#     GameMain. Mod packs sit beside these.
+#   * The root also ships Blueprints/ (401 *.blueprint files, so that is this game's
+#     blueprint format), Zoos/ (*.bin scenario zoos) and ProvidedCustomTextures/
+#     (example .png/.webm sign media). These are the game's own, not mod targets.
+#   * User content lives outside the install, created on first launch:
+#       Documents/Frontier Developments/Planet Zoo 2/{UserMedia,UserMusic,UserHeightmaps}
+#       Saved Games/Frontier Developments/Planet Zoo 2/<SteamID64>/{Saves,Config}
+#     Neither is a modType yet: GDL has no Documents or Saved Games path fact, and the
+#     saves path embeds the player's Steam id. See CORPUS STATE for the mods this leaves
+#     unsupported.
+#
+# The mod SHAPE comes from sibling Cobra games, since Planet Zoo 2 had no mods at launch:
+# all 31 Planet Coaster 2 mods, 10 trending Jurassic World Evolution 3 mods and 18
+# Planet Zoo mods, listed with tools/corpus/list-archive.mjs. See CORPUS STATE.
+#
+# Supports: ovldata content packs (a mod folder carrying Manifest.xml + .ovl files, which
+# covers ACSE and every script/content mod seen on the siblings), game-relative trees
+# laid out from the install root, and ReShade/ShaderToggler configs.
+# ===============================================================================
+
+game:
+  id: planetzoo2
+  name: Planet Zoo 2
+  # Steam's default launch entry, see the header.
+  executable: PlanetZoo2.exe
+  # A discovery fingerprint: every entry must exist, no globs. Kept equal to the exe,
+  # which Steam's launch config confirms. Steam is the only store, so no cross-store
+  # marker is needed.
+  requiredFiles: [PlanetZoo2.exe]
+  logo: gameart.webp
+  author: Nexus Mods
+  nexusDomain: planetzoo2
+  # No `details.supportsSymlinks`. That key exists for UE5 IoStore games (see
+  # docs/deployment-methods.md), and nothing suggests Cobra cares how ovl files are
+  # linked. Vortex only tests `=== false`, so writing `true` would claim a check that
+  # was never made.
+
+#   steam:   3219030, confirmed via the Steam storesearch API and SteamCMD appinfo.
+#   epic:    OMITTED. The game is listed (egdata offer namespace
+#            a336dc3d3c1c4f06bdbb8a0f4eab508f), but on 2026-10-08 the sandbox's only
+#            Windows asset is a 1119-byte download / 11-byte install pre-purchase stub
+#            (artifactId fda0ffdd8b14492386dba0498957341d). Vortex matches the SHIPPING
+#            artifact's manifest AppName, which this stub may not be (starwarszerocompany
+#            hit the same stub shape). Re-check egdata sandbox assets after launch.
+#   xbox:    OMITTED. Microsoft Store product 9NB4JF6B6VSF ("Planet Zoo 2") exists, but
+#            on 2026-10-08 every DisplaySkuAvailability is IsBundle:true with no
+#            PackageFamilyName, and storeedgefd returns PackageFamilyNames [""]. There is
+#            no Identity Name to match yet, and no appExecName for launching. Re-check
+#            after launch; Xbox needs THREE values (recipe §2).
+stores:
+  steam: "3219030"
+
+context:
+  # Verified on the launch install (see the header). Every modType below derives from
+  # this, so a wrong value breaks every destination while the build and tests stay green.
+  ovldataPath: ${installPath}/Win64/ovldata
+
+modTypes:
+  # Rule 6 (CLAUDE.md): once this game is PUBLISHED, these ids are permanent. Vortex stores
+  # the id against every installed mod, so renaming one orphans users' mods and nothing in
+  # the build, tests or corpus catches it. Rename freely BEFORE first release, never after.
+  - { id: planetzoo2-ovldata, name: "ovldata content pack", path: "${ovldataPath}" }
+  - { id: planetzoo2-root,    name: "Root (game folder)",   path: "${installPath}" }
+
+installers:
+  # --- Priority 10: game-relative tree (anything under a Win64/ folder) → install root ---
+  # Authors who lay the archive out from the game folder ship <wrapper>/<Game>/Win64/...,
+  # with TWO wrapper levels (PC2 mods 26 and 27: "KirowMods - SSIAP Peds/Planet Coaster
+  # 2/Win64/ovldata/..."). `copy: {stripCommonRoot}` removes only one, so this anchors on
+  # the Win64/ directory instead, which keeps everything from Win64/ down regardless of
+  # how deep it sits. Files outside Win64/ (the screenshots and README those two mods
+  # ship) are dropped, which is the right outcome: they are not game files.
+  #
+  # FIRST because mod 26 has no Manifest.xml at all. It overwrites a base-game file under
+  # ovldata/Content0, so content-pack (20) cannot claim it, and only the full path says
+  # where the file belongs. Mod 27 does carry a Manifest.xml; content-pack would place it
+  # correctly too, but one rule owning every game-relative archive is easier to reason
+  # about.
+  #
+  # Matches any Win64/ tree, not only Win64/ovldata/: an archive shipping, say, a ReShade
+  # config under Win64/ is laid out from the game folder too, so it deploys exactly as
+  # the author arranged it.
+  - id: game-relative
+    priority: 10
+    when: { hasFile: "**/Win64/**" }
+    anchor: "**/Win64/"
+    take: self
+    placeAt: "${installPath}"
+    modType: planetzoo2-root
+
+  # --- Priority 20: ovldata content pack (<ModFolder>/Manifest.xml + .ovl) → ovldata ---
+  # The overwhelming majority shape: 21 of 31 PC2 mods and all 10 JWE3 mods sampled, ACSE
+  # included. Cobra loads each folder directly under ovldata as one content pack, so the
+  # mod's OWN folder must survive the install. `take: parent.parent` on Manifest.xml keeps
+  # that folder (Mod_X/Manifest.xml → ovldata/Mod_X/Manifest.xml) and strips anything
+  # above it, so an extra wrapper or an ovldata/-rooted archive still lands correctly.
+  #
+  # `when` requires an .ovl too, because Manifest.xml alone is a generic filename.
+  #
+  # The `unless` declines a Manifest.xml at the archive ROOT (PC2 mod 34,
+  # ManufacturerNames: Manifest.xml + Main.ovl, no folder). parent.parent there resolves
+  # above the archive, so the pack would deploy loose into ovldata/ with no folder of its
+  # own, which is broken and collides with the next mod built the same way. The DSL cannot
+  # invent a folder name; that needs an install hook using the mod's name. Until then the
+  # archive stays unmatched, and Vortex's fallback deploys it at the install root, where
+  # it is inert and visible.
+  #
+  # Known shapes this rule gets wrong, none seen in the 41 sibling archives:
+  #   * Packs at DIFFERENT depths (A/Manifest.xml beside W/B/Manifest.xml): the shallowest
+  #     Manifest sets the root, so B lands as ovldata/W/B/.
+  #   * A Manifest.xml only in a pack's SUBFOLDER (A/Sub/Manifest.xml, A/a.ovl): the root
+  #     becomes A/, so the pack folder name is lost.
+  #   * A loose file beside the pack folders (Wrap/readme.txt next to Wrap/Mod_X/) lands
+  #     at ovldata/readme.txt. Inert, but clutter.
+  # Revisit if a real Planet Zoo 2 mod ships one of these.
+  - id: content-pack
+    priority: 20
+    when:
+      all:
+        - { hasFile: "**/Manifest.xml" }
+        - { hasFile: "**/*.ovl" }
+    unless: { hasFile: "Manifest.xml" }
+    anchor: "**/Manifest.xml"
+    take: parent.parent
+    placeAt: "${ovldataPath}"
+    modType: planetzoo2-ovldata
+
+  # --- Priority 30: ReShade / ShaderToggler config → beside the exe ---
+  # PC2 mod 46 ships a lone ShaderToggler.ini, a ReShade addon config, which ReShade reads
+  # from next to the game exe. The exe sits at the install root per Steam's launch
+  # config, so ReShade's own files go there too.
+  # The `unless` keeps any archive carrying real Cobra payload with its own rule.
+  # The anchor repeats the `when` filenames exactly. A broader `**/*.ini` would let an
+  # unrelated, shallower .ini become the install root and silently drop the real config.
+  - id: reshade
+    priority: 30
+    when:
+      any:
+        - { hasFile: "**/{ReShade.ini,ShaderToggler.ini}" }
+        - { hasFile: "**/*.addon64" }
+    unless:
+      any:
+        - { hasFile: "**/*.ovl" }
+        - { hasFile: "**/Manifest.xml" }
+        - { hasFile: "**/Win64/**" }
+    anchor: "**/{ReShade.ini,ShaderToggler.ini,*.addon64}"
+    take: parent
+    placeAt: "${installPath}"
+    modType: planetzoo2-root
+
+toolbarActions:
+  - id: open-nexus-page
+    title: Open Nexus Page
+    priority: 201
+    target: { openUrl: "https://www.nexusmods.com/planetzoo2" }
+
+nexus:
+  modId: 2385            # nexusmods.com/site/mods/2385 (the Vortex extension page)
+  # Confirmed present via v1 (/games/site/mods/2385.json → mod_id 2385, game_id 2295,
+  # uid 9856949946705, created 2026-09-29). The page is status "not_published" /
+  # available: false, which is expected for an unreleased extension.
+  fileGroupId: 8108715
+  # NOT verifiable through the v1 API while the page is unpublished (/files.json returns
+  # 403 "Mod not available: 2385"). Supplied by the maintainer on 2026-10-08 from the
+  # upload page's Advanced panel, whose Unique Mod ID 9856949946705 matches the uid above.
+  displayName: Planet Zoo 2 Support for Vortex
+
+# ---------------------------------------------------------------------------------------
+# CORPUS STATE (2026-10-08): Planet Zoo 2 has ZERO published mods, so `test-corpus` has
+# nothing to route. Every rule above was instead checked against the sibling catalogues,
+# listed with tools/corpus/list-archive.mjs:
+#
+#   Planet Coaster 2, all 31 mods:
+#     content-pack ...... 21   (Mod_X/Manifest.xml + .ovl, ACSE is mod 1)
+#     game-relative ...... 2   (mods 26, 27; only their screenshots/README drop)
+#     reshade ............ 1   (mod 46, ShaderToggler.ini)
+#     unmatched .......... 7, all deliberate
+#   Every content-pack plan kept every archive entry (routed count == entry count).
+#
+#   Unmatched on PC2, and why:
+#     mods 9, 10, 12  .blpr2 blueprints     PC2's own save format, kept in the user's
+#     mod 21          .park2 park save       profile, not the game folder. Planet Zoo 2's
+#                                            equivalents and their location are unknown
+#                                            until launch, so no rule is guessed.
+#     mod 20          PlanetCoaster2.CT      a Cheat Engine table, not a game file.
+#     mod 55          pc2_ride_limit_patcher.py, a script the user runs.
+#     mod 34          Manifest.xml at the archive root, see content-pack's `unless`.
+#
+#   Jurassic World Evolution 3, the 10 trending mods (2, 288, 635-660): 10 content-pack.
+#
+#   Planet Zoo (the first game, game id 3100), 18 trending and recent mods listed
+#   2026-10-08 (58, 60, 191, 505, 537, 644, 696, 983 ACSE, 1525, 2660-2877): 16
+#   content-pack, every archive entry routed (2190 of 2190 for mod 696). 2 unmatched,
+#   both UserMedia sign packs (2871, 2873): bare .png files the author says go in
+#   Documents/Frontier Developments/Planet Zoo/UserMedia. Not supported: GDL has no
+#   Documents path fact, and the Planet Zoo 2 folder name is unknown until launch.
+#
+#   The community Planet Zoo extension (site mod 297 by snappin, v0.0.4, read
+#   2026-10-08) agrees with the inferred layout: PlanetZoo.exe at the install root,
+#   mods in win64/ovldata. It has no installers; it sets queryModPath to ovldata and
+#   lets Vortex's fallback copy each archive there, and warns when ovldata/ACSE is
+#   missing. No ACSE warning here yet: there is no Planet Zoo 2 ACSE to link to.
+#
+# Result of routing both sets through these rules: 34 matched, 7 unmatched, 0 failed,
+# 41 total, 64 validator checks passing. The borrowed listings were removed from
+# tests/cache afterwards, so an empty cache today means "no Planet Zoo 2 mods", not a
+# failed fetch. An empty cache prints "nothing to do" and exits 0: that is NOT a pass.
+#
+# When Planet Zoo 2 mods appear, rerun against the real catalogue. --fetch will not work
+# (the manifest outage in docs/corpus-manifests.md), so:
+#     export PATH="/c/Program Files/7-Zip:$PATH"
+#     node tools/corpus/list-archive.mjs --domain planetzoo2 --game-id 10226 --all
+#         --out games/planetzoo2/tests/cache
+#     pnpm nx run planetzoo2:test-corpus        # note: NO --fetch
+# and reconcile `T total` against `mods` from api.nexusmods.com/v1/games/planetzoo2.json.
+# ---------------------------------------------------------------------------------------
+
+validators:
+  # A regression guard rather than a check on today's rules: as written, its `when`
+  # implies content-pack's own and excludes the only higher-priority rule, so it cannot
+  # fail. It turns red if a later edit adds a rule that steals foldered packs, or tightens
+  # content-pack so they fall through.
+  - id: content-pack-validator
+    name: Foldered Manifest.xml + .ovl archives (not game-relative) match content-pack
+    when:
+      all:
+        - { hasFile: "*/**/Manifest.xml" }
+        - { hasFile: "**/*.ovl" }
+        - not: { hasFile: "Manifest.xml" }
+        - not: { hasFile: "**/Win64/**" }
+    assert: { matched: content-pack }
+
+  # Every .ovl must land under ovldata, whichever rule claims it. A loose .ovl at the
+  # install root or directly in Win64/ is silently ignored by the game.
+  # Skips a root-level Manifest.xml (PC2 mod 34): no rule claims that shape on purpose
+  # (see content-pack's `unless`), so the assertion would sit permanently red on an
+  # archive that is correctly unmatched.
+  - id: ovl-placement
+    name: .ovl/.ovs files install under Win64/ovldata/<folder>/
+    when:
+      all:
+        - { hasFile: "**/*.{ovl,ovs}" }
+        - not: { hasFile: "Manifest.xml" }
+    assert:
+      placement:
+        - files: "**/*.{ovl,ovs}"
+          mustMatch: "**/Win64/ovldata/*/**"
+
+tests:
+  corpus: nexus
+  # Planet Zoo 2 has no mods yet. Each case is either a verbatim (or abridged, where
+  # marked) listing from a SIBLING Cobra game, Planet Coaster 2 or Jurassic World
+  # Evolution 3, or a SYNTHETIC guard labelled as such. They pin rule wiring against real
+  # shapes, but they are not proof that Planet Zoo 2's mods look the same. Replace or
+  # supplement them once real listings exist.
+  cases:
+    # REAL SHAPE (PC2 mod 1, ACSE; JWE3 mod 2 is identical). The script extender most
+    # Cobra script mods require, so it must route like any other pack.
+    - name: "content-pack: ACSE keeps its own folder in ovldata"
+      archive:
+        - ACSE/Changelog.md
+        - ACSE/Extras.ovl
+        - ACSE/Init.ovl
+        - ACSE/Main.ovl
+        - ACSE/Manifest.xml
+        - ACSE/Readme.md
+      expect:
+        matched: content-pack
+        modType: planetzoo2-ovldata
+        plan:
+          - ${ovldataPath}/ACSE/Changelog.md
+          - ${ovldataPath}/ACSE/Extras.ovl
+          - ${ovldataPath}/ACSE/Init.ovl
+          - ${ovldataPath}/ACSE/Main.ovl
+          - ${ovldataPath}/ACSE/Manifest.xml
+          - ${ovldataPath}/ACSE/Readme.md
+
+    # REAL SHAPE (PC2 mod 17, SwitchTracksUnlimited). Nested Main/ with lua sources and a
+    # mod-specific Config ini; the whole tree must ride along under the mod folder.
+    - name: "content-pack: nested lua tree survives under the mod folder"
+      archive:
+        - Mod_SwitchtracksUnlimited/Main/configManager.lua
+        - Mod_SwitchtracksUnlimited/Main/database.Mod_SwitchtracksUnlimitedLuaDatabase.lua
+        - Mod_SwitchtracksUnlimited/Main.ovl
+        - Mod_SwitchtracksUnlimited/Manifest.xml
+      expect:
+        matched: content-pack
+        modType: planetzoo2-ovldata
+        plan:
+          - ${ovldataPath}/Mod_SwitchtracksUnlimited/Main/configManager.lua
+          - ${ovldataPath}/Mod_SwitchtracksUnlimited/Main/database.Mod_SwitchtracksUnlimitedLuaDatabase.lua
+          - ${ovldataPath}/Mod_SwitchtracksUnlimited/Main.ovl
+          - ${ovldataPath}/Mod_SwitchtracksUnlimited/Manifest.xml
+
+    # REAL SHAPE (JWE3 mod 637, an animal pack), abridged to its distinct subtrees. The
+    # pack ships Init/ and Main/ folders next to Init.ovl and Main.ovl, plus an Animals/
+    # content tree; nothing may be flattened.
+    - name: "content-pack: animal pack with content subtree"
+      archive:
+        - NexusRemaster_AcrocanthosaurusV2/Animals/Acrocanthosaurus/Acrocanthosaurus.ovl
+        - NexusRemaster_AcrocanthosaurusV2/Init.ovl
+        - NexusRemaster_AcrocanthosaurusV2/Main.ovl
+        - NexusRemaster_AcrocanthosaurusV2/Manifest.xml
+      expect:
+        matched: content-pack
+        modType: planetzoo2-ovldata
+        plan:
+          - ${ovldataPath}/NexusRemaster_AcrocanthosaurusV2/Animals/Acrocanthosaurus/Acrocanthosaurus.ovl
+          - ${ovldataPath}/NexusRemaster_AcrocanthosaurusV2/Init.ovl
+          - ${ovldataPath}/NexusRemaster_AcrocanthosaurusV2/Main.ovl
+          - ${ovldataPath}/NexusRemaster_AcrocanthosaurusV2/Manifest.xml
+
+    # SYNTHETIC: JWE3 mod 660's pack (MDMaip, abridged) placed under an invented wrapper
+    # folder. Those authors title archives "EXTRACT THIS FOLDER", so a wrapped variant is
+    # a matter of time. parent.parent must strip the wrapper and keep the pack folder.
+    - name: "content-pack: extra wrapper folder is stripped"
+      archive:
+        - Download/MDMaip/Init.ovl
+        - Download/MDMaip/Main.ovl
+        - Download/MDMaip/Manifest.xml
+      expect:
+        matched: content-pack
+        modType: planetzoo2-ovldata
+        plan:
+          - ${ovldataPath}/MDMaip/Init.ovl
+          - ${ovldataPath}/MDMaip/Main.ovl
+          - ${ovldataPath}/MDMaip/Manifest.xml
+
+    # NOTE: content-pack's root-level `unless` (PC2 mod 34) has NO automated guard.
+    # tests.cases can only assert which installer matched (the harness throws when none
+    # does), and both validators skip that shape so they do not sit red on a correctly
+    # unmatched archive. If you remove the `unless`, check mod 34's plan by hand.
+
+    # REAL SHAPE (PC2 mod 26, SSIAP Peds): overwrites a base-game file under
+    # ovldata/Content0, behind TWO wrapper folders, with no Manifest.xml. Only
+    # game-relative can place it, and the screenshots/README outside Win64/ drop.
+    - name: "game-relative: double-wrapped Content0 override"
+      archive:
+        - KirowMods - SSIAP Peds/Planet Coaster 2/Win64/ovldata/Content0/Characters/Staff/Security/3ZH2A1EYMPVLP_.aux
+        - KirowMods - SSIAP Peds/Planet Coaster 2/Win64/ovldata/Content0/Characters/Staff/Security/Security.ovl
+        - KirowMods - SSIAP Peds/README, LISEZ-MOI.txt
+        - KirowMods - SSIAP Peds/SSIAP-1.png
+      expect:
+        matched: game-relative
+        modType: planetzoo2-root
+        plan:
+          - ${installPath}/Win64/ovldata/Content0/Characters/Staff/Security/3ZH2A1EYMPVLP_.aux
+          - ${installPath}/Win64/ovldata/Content0/Characters/Staff/Security/Security.ovl
+
+    # GUARD CASE, REAL SHAPE (PC2 mod 27, ERP): game-relative AND carrying a Manifest.xml.
+    # game-relative (10) must win over content-pack (20). Both would place it correctly,
+    # so this pins the ordering rather than a destination difference.
+    - name: "game-relative: wins over content-pack for a wrapped tree with Manifest"
+      archive:
+        - KirowMods - ERP (Emergency Realism Pack) V.1/Planet Coaster 2/Win64/ovldata/KMods_ERP/Init.ovl
+        - KirowMods - ERP (Emergency Realism Pack) V.1/Planet Coaster 2/Win64/ovldata/KMods_ERP/Main.ovl
+        - KirowMods - ERP (Emergency Realism Pack) V.1/Planet Coaster 2/Win64/ovldata/KMods_ERP/Manifest.xml
+        - KirowMods - ERP (Emergency Realism Pack) V.1/R0.png
+      expect:
+        matched: game-relative
+        modType: planetzoo2-root
+        plan:
+          - ${installPath}/Win64/ovldata/KMods_ERP/Init.ovl
+          - ${installPath}/Win64/ovldata/KMods_ERP/Main.ovl
+          - ${installPath}/Win64/ovldata/KMods_ERP/Manifest.xml
+
+    # REAL SHAPE (PC2 mod 46, Toggleable Falling Snow and Rain): a lone ShaderToggler.ini.
+    - name: "reshade: lone ShaderToggler.ini beside the exe"
+      archive:
+        - ShaderToggler.ini
+      expect:
+        matched: reshade
+        modType: planetzoo2-root
+        plan:
+          - ${installPath}/ShaderToggler.ini
+
+    # GUARD CASE, SYNTHETIC: reshade's anchor must name the same files as its `when`. With
+    # the earlier `**/*.{ini,addon64}` anchor the shallower Notes/notes.ini became the
+    # install root and ShaderToggler.ini was silently dropped.
+    - name: "reshade guard: unrelated shallower .ini does not steal the root"
+      archive:
+        - Notes/notes.ini
+        - Preset/Config/ShaderToggler.ini
+      expect:
+        matched: reshade
+        modType: planetzoo2-root
+        plan:
+          - ${installPath}/ShaderToggler.ini
+
+    # GUARD CASE for reshade's `unless`: a content pack that ships a ReShade.ini inside
+    # its folder keeps content-pack routing. Synthetic. content-pack (20) already sorts
+    # first, so this pins the ordering; the `unless` itself matters for an archive
+    # content-pack declines, which tests.cases cannot express (see the note above).
+    - name: "content-pack: ReShade.ini inside a pack folder rides along"
+      archive:
+        - SomeOvlTweak/ReShade.ini
+        - SomeOvlTweak/Main.ovl
+        - SomeOvlTweak/Manifest.xml
+      expect:
+        matched: content-pack
+        modType: planetzoo2-ovldata
+        plan:
+          - ${ovldataPath}/SomeOvlTweak/ReShade.ini
+          - ${ovldataPath}/SomeOvlTweak/Main.ovl
+          - ${ovldataPath}/SomeOvlTweak/Manifest.xml
