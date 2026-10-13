@@ -30,7 +30,8 @@ version: 1.0.0   # extension version: drives info.json, the release tag, and the
 #
 # Supports: ovldata content packs (a mod folder carrying Manifest.xml + .ovl files, which
 # covers ACSE and every script/content mod seen on the siblings), game-relative trees
-# laid out from the install root, and ReShade/ShaderToggler configs.
+# laid out from the install root, the startup movie replacement, and ReShade/ShaderToggler
+# configs.
 # ===============================================================================
 
 game:
@@ -70,12 +71,17 @@ context:
   # this, so a wrong value breaks every destination while the build and tests stay green.
   ovldataPath: ${installPath}/Win64/ovldata
 
+  # Holds a single file on the launch install, FrontierLogo_Birds.webm (27 MB), the
+  # startup logo video.
+  moviesPath: ${installPath}/Movies
+
 modTypes:
   # Rule 6 (CLAUDE.md): once this game is PUBLISHED, these ids are permanent. Vortex stores
   # the id against every installed mod, so renaming one orphans users' mods and nothing in
   # the build, tests or corpus catches it. Rename freely BEFORE first release, never after.
   - { id: planetzoo2-ovldata, name: "ovldata content pack", path: "${ovldataPath}" }
   - { id: planetzoo2-root,    name: "Root (game folder)",   path: "${installPath}" }
+  - { id: planetzoo2-movies,  name: "Startup movie",        path: "${moviesPath}" }
 
 installers:
   # --- Priority 10: game-relative tree (anything under a Win64/ folder) → install root ---
@@ -140,6 +146,28 @@ installers:
     placeAt: "${ovldataPath}"
     modType: planetzoo2-ovldata
 
+  # --- Priority 25: startup movie replacement → Movies ---
+  # The first published Planet Zoo 2 mod (mod 3, 2026-10-13) replaces the Frontier logo
+  # intro: Movies/FrontierLogo_Birds.webm, the only file in the game's Movies/ folder.
+  # `take: parent` lands the file in Movies/ whether the archive ships it bare, under
+  # Movies/, or under a wrapper.
+  #
+  # Keyed on the exact filename, NOT any .webm: the game also takes .webm as sign media
+  # (ProvidedCustomTextures ships examples, and players add their own under
+  # Documents/.../UserMedia), so a broad match would push sign packs into Movies/ where
+  # the game never looks.
+  - id: movies
+    priority: 25
+    when: { hasFile: "**/FrontierLogo_Birds.webm" }
+    unless:
+      any:
+        - { hasFile: "**/*.ovl" }
+        - { hasFile: "**/Win64/**" }
+    anchor: "**/FrontierLogo_Birds.webm"
+    take: parent
+    placeAt: "${moviesPath}"
+    modType: planetzoo2-movies
+
   # --- Priority 30: ReShade / ShaderToggler config → beside the exe ---
   # PC2 mod 46 ships a lone ShaderToggler.ini, a ReShade addon config, which ReShade reads
   # from next to the game exe. The exe sits at the install root per Steam's launch
@@ -181,9 +209,11 @@ nexus:
   displayName: Planet Zoo 2 Support for Vortex
 
 # ---------------------------------------------------------------------------------------
-# CORPUS STATE (2026-10-08): Planet Zoo 2 has ZERO published mods, so `test-corpus` has
-# nothing to route. Every rule above was instead checked against the sibling catalogues,
-# listed with tools/corpus/list-archive.mjs:
+# CORPUS STATE, launch day (2026-10-13): 1 published Planet Zoo 2 mod, routed: mod 3
+# (startup movie replacement) → movies. The API also lists mods 1 (hidden) and 2
+# (not_published), neither downloadable. Before launch (2026-10-08) there were ZERO, so
+# every other rule was checked against the sibling catalogues, listed with
+# tools/corpus/list-archive.mjs:
 #
 #   Planet Coaster 2, all 31 mods:
 #     content-pack ...... 21   (Mod_X/Manifest.xml + .ovl, ACSE is mod 1)
@@ -218,8 +248,8 @@ nexus:
 #
 # Result of routing both sets through these rules: 34 matched, 7 unmatched, 0 failed,
 # 41 total, 64 validator checks passing. The borrowed listings were removed from
-# tests/cache afterwards, so an empty cache today means "no Planet Zoo 2 mods", not a
-# failed fetch. An empty cache prints "nothing to do" and exits 0: that is NOT a pass.
+# tests/cache afterwards, so the cache holds only real Planet Zoo 2 listings. An empty
+# cache prints "nothing to do" and exits 0: that is NOT a pass.
 #
 # When Planet Zoo 2 mods appear, rerun against the real catalogue. --fetch will not work
 # (the manifest outage in docs/corpus-manifests.md), so:
@@ -380,6 +410,28 @@ tests:
           - ${installPath}/Win64/ovldata/KMods_ERP/Manifest.xml
 
     # REAL SHAPE (PC2 mod 46, Toggleable Falling Snow and Rain): a lone ShaderToggler.ini.
+    # REAL SHAPE, Planet Zoo 2 mod 3 ("We Saiyans Have No Limits"), the first mod
+    # published for the game. Verbatim listing: one file under Movies/.
+    - name: "movies: real mod 3, startup logo replacement"
+      archive:
+        - Movies/FrontierLogo_Birds.webm
+      expect:
+        matched: movies
+        modType: planetzoo2-movies
+        plan:
+          - ${moviesPath}/FrontierLogo_Birds.webm
+
+    # SYNTHETIC: the same file shipped bare, the other shape authors use for single-file
+    # replacements. It must still land in Movies/, not the install root.
+    - name: "movies: bare FrontierLogo_Birds.webm still lands in Movies"
+      archive:
+        - FrontierLogo_Birds.webm
+      expect:
+        matched: movies
+        modType: planetzoo2-movies
+        plan:
+          - ${moviesPath}/FrontierLogo_Birds.webm
+
     - name: "reshade: lone ShaderToggler.ini beside the exe"
       archive:
         - ShaderToggler.ini
