@@ -305,6 +305,7 @@ Verified 2026-07-25. Keep this in sync — `tools/audit-docs.mjs` checks that ev
 | Non-UE, **minimal** (Unity/BepInEx) | `games/moonlightpeaks` | Smallest complete game: 2 installers (`bepinex`, `root`), 1 validator. Copy its *structure* — but it has **zero comments**, so don't copy its documentation habits (see SKILL.md Step 3b). |
 | Non-UE, proprietary engine | `games/assassinscreedblackflagresynced` | Anvil: `.forge`/`.asi`/ReShade routing. Also the precedent for documenting a catalogue the corpus can't route. |
 | Non-UE, nested-exe layout | `games/007firstlight` | Glacier/RPKG; `executable` under `Retail/`. Also comment-free — structure only. |
+| Non-UE, **Frontier Cobra** (`Win64/ovldata`), unreleased | `games/planetzoo2` | One folder per content pack under `ovldata`, kept by anchoring `Manifest.xml` with `take: parent.parent`; game-relative trees anchored on the `Win64/` directory, which survives any number of wrappers. Shows how to verify rules against **sibling games' catalogues** when the target has zero mods, then clear the borrowed cache. Reuse for Planet Coaster 2 or Jurassic World Evolution. |
 
 Anything else non-Unreal: research the mod format (loader, mod folder, file types) and build
 `modTypes` + `installers` from scratch, then validate against real mods via the corpus loop.
