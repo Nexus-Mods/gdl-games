@@ -209,9 +209,14 @@ nexus:
   displayName: Planet Zoo 2 Support for Vortex
 
 # ---------------------------------------------------------------------------------------
-# CORPUS STATE, launch day (2026-10-13): 1 published Planet Zoo 2 mod, routed: mod 3
-# (startup movie replacement) → movies. The API also lists mods 1 (hidden) and 2
-# (not_published), neither downloadable. Before launch (2026-10-08) there were ZERO, so
+# CORPUS STATE (2026-10-14): 3 published Planet Zoo 2 mods, all routed, 0 unmatched:
+#   mod 3  startup movie replacement (Movies/FrontierLogo_Birds.webm) → movies
+#   mod 4  Xtreme Scaling (XTremeScaling/Init.ovl, Main.ovl, Manifest.xml) → content-pack,
+#          the first real Planet Zoo 2 pack, the exact shape predicted from the siblings.
+#   mod 6  Advanced Move Hotkeys (Manifest.xml, Init/Main.ovl, Config.*.ini, README) →
+#          content-pack, all 5 files. Same shape as the PC2 script mods.
+# The API also lists mods 1 (hidden), 2 (not_published) and 5 (removed), none
+# downloadable. Before launch (2026-10-08) there were ZERO, so
 # every other rule was checked against the sibling catalogues, listed with
 # tools/corpus/list-archive.mjs:
 #
@@ -293,12 +298,27 @@ validators:
 
 tests:
   corpus: nexus
-  # Planet Zoo 2 has no mods yet. Each case is either a verbatim (or abridged, where
-  # marked) listing from a SIBLING Cobra game, Planet Coaster 2 or Jurassic World
-  # Evolution 3, or a SYNTHETIC guard labelled as such. They pin rule wiring against real
-  # shapes, but they are not proof that Planet Zoo 2's mods look the same. Replace or
-  # supplement them once real listings exist.
+  # Cases marked "real Planet Zoo 2 mod" are verbatim listings from this game. The rest
+  # are verbatim (or abridged, where marked) listings from a SIBLING Cobra game, Planet
+  # Coaster 2 or Jurassic World Evolution 3, or a SYNTHETIC guard labelled as such. The
+  # sibling cases pin rule wiring against real shapes, but are not proof that Planet
+  # Zoo 2's mods look the same. Swap in real listings as they appear.
   cases:
+    # REAL SHAPE, Planet Zoo 2 mod 4 ("Xtreme Scaling" by ViraLCyclopes), the first
+    # content pack published for this game. Verbatim listing.
+    - name: "content-pack: real Planet Zoo 2 mod 4, Xtreme Scaling"
+      archive:
+        - XTremeScaling/Init.ovl
+        - XTremeScaling/Main.ovl
+        - XTremeScaling/Manifest.xml
+      expect:
+        matched: content-pack
+        modType: planetzoo2-ovldata
+        plan:
+          - ${ovldataPath}/XTremeScaling/Init.ovl
+          - ${ovldataPath}/XTremeScaling/Main.ovl
+          - ${ovldataPath}/XTremeScaling/Manifest.xml
+
     # REAL SHAPE (PC2 mod 1, ACSE; JWE3 mod 2 is identical). The script extender most
     # Cobra script mods require, so it must route like any other pack.
     - name: "content-pack: ACSE keeps its own folder in ovldata"
