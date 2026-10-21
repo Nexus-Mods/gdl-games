@@ -285,7 +285,7 @@ pnpm nx run <id>:test-corpus -- --fetch --limit 100
 
 > **A green run can be completely vacuous** — an all-failed fetch and an empty cache both exit 0.
 > Always reconcile the `T total` in the summary against the `mods` count from
-> `/v1/games/<domain>.json`. Mechanics, the current manifest outage, and the offline workaround:
+> `/v1/games/<domain>.json`. Mechanics and where the manifests come from:
 > [`docs/corpus-manifests.md`](../../../../docs/corpus-manifests.md).
 
 ## 6. Template map (copy the closest existing game)

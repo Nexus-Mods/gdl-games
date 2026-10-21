@@ -1,19 +1,20 @@
 # Corpus state — Halo: Campaign Evolved
 
-`tests/cache/` here is **not** produced by `test:corpus --fetch`. Every mod on this game was
-uploaded after Nexus stopped generating file-preview manifests (~11 June 2026), so `--fetch` returns
-404 for all of them and routes nothing while still exiting 0.
-
-The listings were generated from the archives instead:
-
 ```sh
-node tools/corpus/list-archive.mjs --domain halocampaignevolved --game-id 9685 --all \
-  --out games/halocampaignevolved/tests/cache
-pnpm nx run halocampaignevolved:test-corpus        # note: no --fetch
+pnpm nx run halocampaignevolved:test-corpus -- --fetch
 ```
 
 See [`docs/corpus-manifests.md`](../../../docs/corpus-manifests.md). `tests/cache/` is gitignored,
-so re-run the command above to reproduce it.
+so re-run the command above to reproduce it. The 2026-07-25 listings below were built by hand during
+the June 2026 manifest outage; `--fetch` covers every upload now.
+
+## Latest fetch, 2026-10-20
+
+`305 total / 305 mods` → **279 matched, 26 unmatched, 0 failed**; validators **265 passed, 9
+failed**. The catalogue has grown from 41 mods since the coverage below, and the 26 unmatched and 9
+failures haven't been triaged yet: 5 `ue4ss-lua` mods routed to `wrapped-root`, 2 `logicmods` mods
+routed elsewhere (mod 129 to `root`, mod 279 to `ue4ss-injector`), and 2 mods whose `.pak` files
+sit under a UE4SS mod folder (mods 73 and 279).
 
 ## Coverage as of 2026-07-25
 

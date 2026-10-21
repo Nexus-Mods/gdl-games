@@ -160,9 +160,10 @@ nexus:
   displayName: AC Black Flag Resynced Support for Vortex
 
 # Corpus validators: assertions checked against real Nexus archives via
-# `gdl test:corpus --fetch`. The Resynced page is new (its handful of uploads have no
-# generated file-preview yet, so corpus can't route them); the tests.cases below —
-# modelled on the modern-Anvil AC Mirage catalogue — are the real regression guard.
+# `gdl test:corpus --fetch`. When this was written the Resynced page was new and its
+# uploads had no manifests (the June 2026 outage, docs/corpus-manifests.md), so corpus
+# couldn't route them; the tests.cases below, modelled on the modern-Anvil AC Mirage
+# catalogue, are the real regression guard.
 validators:
   - id: reshade-to-root
     name: "ReShade presets (ReShade.ini/ReShadePreset.ini, no .forge/.asi) install to the game root"

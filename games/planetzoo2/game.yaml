@@ -26,7 +26,7 @@ version: 1.0.0   # extension version: drives info.json, the release tag, and the
 #
 # The mod SHAPE comes from sibling Cobra games, since Planet Zoo 2 had no mods at launch:
 # all 31 Planet Coaster 2 mods, 10 trending Jurassic World Evolution 3 mods and 18
-# Planet Zoo mods, listed with tools/corpus/list-archive.mjs. See CORPUS STATE.
+# Planet Zoo mods, listed from their archives. See CORPUS STATE.
 #
 # Supports: ovldata content packs (a mod folder carrying Manifest.xml + .ovl files, which
 # covers ACSE and every script/content mod seen on the siblings), game-relative trees
@@ -217,8 +217,8 @@ nexus:
 #          content-pack, all 5 files. Same shape as the PC2 script mods.
 # The API also lists mods 1 (hidden), 2 (not_published) and 5 (removed), none
 # downloadable. Before launch (2026-10-08) there were ZERO, so
-# every other rule was checked against the sibling catalogues, listed with
-# tools/corpus/list-archive.mjs:
+# every other rule was checked against the sibling catalogues, listed from their archives
+# during the June 2026 manifest outage (docs/corpus-manifests.md):
 #
 #   Planet Coaster 2, all 31 mods:
 #     content-pack ...... 21   (Mod_X/Manifest.xml + .ovl, ACSE is mod 1)
@@ -256,12 +256,8 @@ nexus:
 # tests/cache afterwards, so the cache holds only real Planet Zoo 2 listings. An empty
 # cache prints "nothing to do" and exits 0: that is NOT a pass.
 #
-# When Planet Zoo 2 mods appear, rerun against the real catalogue. --fetch will not work
-# (the manifest outage in docs/corpus-manifests.md), so:
-#     export PATH="/c/Program Files/7-Zip:$PATH"
-#     node tools/corpus/list-archive.mjs --domain planetzoo2 --game-id 10226 --all
-#         --out games/planetzoo2/tests/cache
-#     pnpm nx run planetzoo2:test-corpus        # note: NO --fetch
+# When Planet Zoo 2 mods appear, rerun against the real catalogue:
+#     pnpm nx run planetzoo2:test-corpus -- --fetch
 # and reconcile `T total` against `mods` from api.nexusmods.com/v1/games/planetzoo2.json.
 # ---------------------------------------------------------------------------------------
 

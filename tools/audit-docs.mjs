@@ -35,7 +35,6 @@ const DOCS = [
   'docs/deployment-methods.md',
   'games/starwarszerocompany/tests/README.md',
   'games/halocampaignevolved/tests/README.md',
-  'tools/corpus/README.md',
   '.claude/skills/implement-game-extension/SKILL.md',
   MAP,
 ];

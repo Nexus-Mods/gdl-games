@@ -1,4 +1,4 @@
-# Corpus testing: manifests, the silent-pass trap, and the offline workaround
+# Corpus testing: manifests and the silent-pass trap
 
 The corpus loop is how a game extension proves it routes **real** mods, not invented ones. This doc
 is the single source of truth for how it works, how it fails, and what to do when it can't run.
@@ -17,21 +17,56 @@ With `tests.corpus: nexus` in `game.yaml`:
 1. `fetchPublishedModIds(domain)` lists every published mod (paginated GraphQL).
 2. For each mod, `modFiles(modId, gameId)` returns its files; `pickDefaultFile` picks the newest
    `MAIN` file, else the newest of any category (`gdl/src/nexus/fetch-corpus.ts:22-27`).
-3. That file's **`uri`** becomes a manifest URL:
-   `${NEXUS_FILE_META}/${gameId}/${modId}/${encodeURIComponent(uri)}.json`
-   where `NEXUS_FILE_META = https://file-metadata.nexusmods.com/file/nexus-files-s3-meta`
-   (`gdl/src/nexus/client.ts:3`, `:80-87`).
-4. The manifest — a recursive `{name, path, type, children|size}` tree — is cached to
+3. That file's `fileId` is looked up on the v3 API, whose response carries the manifest's URL in
+   `manifest_url`:
+   `GET https://api.nexusmods.com/v3/games/<domain>/mod-file-versions/<fileId>` with an `apikey`
+   header (`fetchArchiveManifest` in `gdl/src/nexus/client.ts`). The v3 id is the same `fileId`
+   that v1 and GraphQL use.
+4. The manifest at `manifest_url` is cached to
    `games/<id>/tests/cache/${gameId}_${modId}_${fileId}_${safe(uri)}.json`
-   (`fetch-corpus.ts:60`).
+   (`fetch-corpus.ts:60`). The manifest host (`mod-file-manifests.nexusmods.com`) is public, so
+   gdl doesn't send the key there.
 5. Every cached listing is replayed through the `installers` and `validators`.
 
-The manifest is a **file listing only** — the corpus never sees archive contents
-(`gdl/src/corpus/archive.ts:20`). That's enough to test routing, and it's why listings can be
-reconstructed by other means (see [the workaround](#the-workaround-listing-archives-without-manifests)).
+That one route covers every upload, old and new. It needs a normal API key, not a premium one.
+Nothing downloads an archive, and no second API is involved.
 
-The manifests are static artifacts generated asynchronously by Nexus. They are **not** guaranteed to
-exist for a given upload.
+### What a manifest holds
+
+```json
+{
+  "version": 1,
+  "archive":  { "size": 33210786, "hashes": { "SHA1": "…", "SHA256": "…", "SHA512": "…", "MD5": "…", "CRC32": "…", "XXH64": "…", "XXH3_64": "…" } },
+  "repacked": { "size": 25627180, "hashes": { … } },
+  "files": [
+    { "file_path": "ue4ss/Changelog.md", "file_size": 63174, "file_hashes": { "SHA1": "…", "MD5": "…", … } }
+  ]
+}
+```
+
+A flat list of every file with its real size and seven hashes, plus the same for the uploaded
+archive and Nexus's repacked copy. The corpus reads only `file_path` and drops `__MACOSX/` entries
+(`flattenManifest`). It never sees archive contents (`gdl/src/corpus/archive.ts`).
+
+`readManifestEntries` also reads the older `{name, path, type, children}` tree format, so a cache
+written before the switch still replays.
+
+### Coverage, checked 2026-10-20
+
+Every file of every published mod on the 12 games in this repo with a Nexus page: 12,440 files
+across 2,885 mods.
+
+- v3 returned `manifest_url` for all 12,440.
+- 12,394 manifests loaded. The 46 that 404'd are 34 bare `.exe` installers, 3 files with no
+  extension, 8 zero-byte `.zip` uploads and 1 real 34 KB zip (`thebloodofdawnwalker` mod 131, file
+  348). None of those is a mod the corpus could route anyway, bar the last.
+- 1,624 of the 1,688 pre-June files that still had an old-style manifest list exactly the same
+  paths. Of the 64 that differ, 48 are the old format listing an empty directory as a file, 14 are
+  `__MACOSX/` entries the old format left out (gdl drops them now), and 1 is a mod with Cyrillic
+  filenames that come through garbled (`007firstlight` mod 52, file 233).
+
+The API says `manifest_url` is null when there is no manifest, and may briefly 404 while a new
+upload is still processing. gdl reports both as a per-mod error, so they show up as `✖` lines.
 
 ## The silent-pass trap — read this before believing a green run
 
@@ -56,71 +91,27 @@ tail the output.
    `summary: N matched, M unmatched, K failed, T total` line and reconcile `T` yourself.
 4. When reporting results, state how many mods actually routed — not just "matched".
 
-Real example: `games/moonlightpeaks` has **68 published mods** and an **empty** `tests/cache/`. Its
-corpus run prints 68 `✖` lines and exits 0.
+Real example: during the 2026 manifest outage (see [History](#history-the-june-2026-outage)),
+`games/moonlightpeaks` had **68 published mods** and an **empty** `tests/cache/`. Its corpus run
+printed 68 `✖` lines and exited 0.
 
 If the code cites above no longer match, the trap may have been fixed — verify before relying on
 this section.
 
-## The UUID-uri outage (current, known)
+## History: the June 2026 outage
 
-Since **~11 June 2026**, Nexus returns a new `uri` shape and no manifests exist for it:
+Before October 2026, gdl built the manifest URL from the GraphQL file `uri` on a different host,
+`https://file-metadata.nexusmods.com/file/nexus-files-s3-meta/<gameId>/<modId>/<uri>.json`, which
+returned a `{name, path, type, children|size}` tree with rounded sizes and no hashes.
 
-| `uri` shape | example | manifest |
-|---|---|---|
-| legacy filename | `Solarpunk UE4SS Developer-4-1-0-1-1780981537.zip` | **200** |
-| UUID path | `03/c9/aa/03c9aae5-1b33-4536-9b79-b5bef18a9222` | **404** |
+From about 11 June 2026, new uploads got a UUID-style `uri` (`03/c9/aa/03c9aae5-…`) and that host
+404'd for all of them, on every game. Until v3 `manifest_url` replaced it, the repo listed archives
+by hand with `tools/corpus/list-archive.mjs`: a premium download link, then a `Range` read of each
+zip's central directory, or a full download for `.7z`/`.rar`. That tool has been deleted. Its
+listings wrote `size: "1 KB"` for every file, so treat any old cache with those sizes as
+placeholder data and re-fetch.
 
-The switchover was sharp: last legacy-uri upload 04:23 UTC, first UUID-uri upload 10:47 UTC, same
-day. The clearest demonstration is a single mod that has both — `solarpunk` (game 8156) mod 4 —
-where the legacy file resolves and the UUID file 404s.
-
-Key points:
-
-- This affects **every upload since that date on any game**, not just newly-added games. Older games
-  keep partial coverage only because their pre-June uploads still resolve.
-- It is **not** a `gdl` bug and **not** an auth problem. The metadata host ignores credentials
-  entirely — a working URL returns 200 with no API key at all. Percent-encoded vs literal slashes
-  both 404, so it isn't `encodeURIComponent` mangling the path either.
-- `modFileContents` (v2 GraphQL) looks like a replacement — it has `filePath`/`fileName`/
-  `fileExtension` — but returns `totalCount: 0` for every game tried, including ones whose S3
-  manifests work. Not currently a substitute.
-- This is a **known issue at Nexus**, tracked internally. **Recheck whether it's fixed** before
-  reaching for the workaround.
-
-## The workaround: listing archives without manifests
-
-The archives themselves are fine — only the manifests are missing. You can still get **real** file
-listings, which is what the corpus actually needs.
-
-Use the committed tool:
-
-```sh
-node tools/corpus/list-archive.mjs --domain <domain> --game-id <id> --all \
-  --out games/<id>/tests/cache
-pnpm nx run <id>:test-corpus          # NOTE: no --fetch — routes the local cache
-```
-
-See [`tools/corpus/README.md`](../tools/corpus/README.md). How it works:
-
-1. **Signed CDN links** — `GET /v1/games/<domain>/mods/<modId>/files/<fileId>/download_link.json`
-   with an `apikey` header returns direct CDN URLs (requires a **premium** account). The CDN path
-   uses the *same* UUID key that 404s on the metadata host.
-2. **Range reads** — the CDN honours `Range` (`206 Partial Content`). For a `.zip`, read the last
-   ~96 KB, find the End Of Central Directory signature `PK\x05\x06`, then walk the central directory
-   (`PK\x01\x02`) for the complete file listing. This got **109 entries out of a 2 GB archive from a
-   64 KB read**. Only `.7z`/`.rar` need a full download.
-3. **Emit manifest-shaped JSON** into `tests/cache/` using the same `{name, path, type, children}`
-   tree gdl's `flattenManifest` expects (root: `name: ""`, `path: ""`, `type: "directory"`), with
-   filenames matching what `--fetch` would write. Then run `test-corpus` **without** `--fetch`.
-
-> **Gotcha that cost real debugging time:** `7z l -ba -slt` prints entries with **no header line**.
-> Do **not** skip the first `Path = ` entry. Doing so silently reports single-file archives as
-> *empty*, which nearly hid an entire mod category (five `Engine.ini` mods) on
-> `halocampaignevolved`. Also filter out `Folder = +` rows so directories aren't treated as files.
-
-Worked example: `games/halocampaignevolved/tests/cache/` (37 hand-generated listings) →
-`32 matched, 5 unmatched, 0 failed`. See `games/halocampaignevolved/tests/README.md`.
+Game comments written during the outage say `--fetch` doesn't work. That is no longer true.
 
 ## Corpus evidence is never committed
 
