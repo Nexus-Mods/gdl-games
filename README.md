@@ -23,8 +23,7 @@ gdl-games/
 │   │   └── gameart.webp       #   paralives, solarpunk, subnautica2
 │   └── subnautica2/           # games needing custom logic also have:
 │       └── src/hooks.ts       #   version detection / deploy hooks
-├── docs/corpus-manifests.md   # corpus verification: how it works, fails, and the workaround
-├── tools/corpus/              # build corpus listings when Nexus manifests are unavailable
+├── docs/corpus-manifests.md   # corpus verification: how it works and how it fails
 ├── tools/nx/gdl-plugin.js     # Nx inference plugin: game.yaml → project + targets
 ├── tools/audit-docs.mjs       # guards these docs against drifting out of date
 ├── CLAUDE.md                  # cross-cutting rules + where each fact is documented
@@ -105,9 +104,7 @@ Or run it raw from inside the game folder: `node ../../gdl/dist/cli.js test:corp
 > `T total` in the summary line against the game's real `mods` count from
 > `https://api.nexusmods.com/v1/games/<domain>.json`.
 >
-> Nexus currently has **no manifests for uploads after ~11 June 2026**, so `--fetch` returns 404 for
-> recent mods on any game. Use `tools/corpus/list-archive.mjs` to build listings from the archives
-> instead. Full detail: [`docs/corpus-manifests.md`](docs/corpus-manifests.md).
+> Full detail, including where the manifests come from: [`docs/corpus-manifests.md`](docs/corpus-manifests.md).
 
 ## Releasing
 

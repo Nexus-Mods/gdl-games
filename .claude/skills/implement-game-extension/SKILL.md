@@ -182,14 +182,7 @@ Do these in order:
    ```
 3. **Reconcile.** Compare `T` in `summary: N matched, M unmatched, K failed, T total` against the
    count from (1). `T=0`, `0 matched`, or `nothing to do` are **FAILURES, not passes**.
-4. **If manifests 404** (currently expected for any upload after ~11 June 2026), generate listings
-   from the archives instead, then route them locally — note the **absent** `--fetch`:
-   ```sh
-   node tools/corpus/list-archive.mjs --domain <domain> --game-id <gameId> --all \
-     --out games/<id>/tests/cache
-   pnpm nx run <id>:test-corpus
-   ```
-5. **Only then iterate** on unmatched/misrouted mods: inspect the cached listing, adjust
+4. **Only then iterate** on unmatched/misrouted mods: inspect the cached listing, adjust
    `modTypes` + `installers`, re-run, and confirm no regressions on already-matched mods.
 
 Iterate until every published mod matches the correct installer, or is intentionally unsupported
@@ -316,6 +309,6 @@ is ready and they can commit/push (and bump `version`) when they want to release
 - [`gdl/README.md`](../../../gdl/README.md) — the DSL: every `game.yaml` key, predicates,
   `take`/`anchor`/`placeAt`, built-in facts, CLI flags. **Authoritative; this skill does not restate it.**
 - [`README.md`](../../../README.md) — repo setup, Nx targets, release process.
-- [`docs/corpus-manifests.md`](../../../docs/corpus-manifests.md) — corpus mechanics, the
-  silent-pass trap, the manifest outage, and the offline workaround.
+- [`docs/corpus-manifests.md`](../../../docs/corpus-manifests.md): corpus mechanics, where
+  manifests come from, and the silent-pass trap.
 - `references/research-recipes.md` — the curl recipes and the template map.

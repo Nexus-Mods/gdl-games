@@ -9,12 +9,10 @@ version: 1.0.3   # extension version — drives info.json, the release tag, and 
 # own relative prefix and self-places under the game folder. The two ids exist to label
 # the mod type in Vortex's UI, not to point at different directories.
 #
-# Corpus state: 68 mods are published, but every upload postdates the June 2026 Nexus
-# manifest outage, so `test:corpus --fetch` fetches nothing and tests/cache/ is empty —
-# a run prints 68 "✖" lines and still exits 0. The tests.cases below are therefore the
-# only regression guard. To route the real catalogue, generate listings first:
-#   node tools/corpus/list-archive.mjs --domain moonlightpeaks --game-id 9480 --all \
-#     --out games/moonlightpeaks/tests/cache
+# Corpus state: 68 mods were published when this was written, all during the June 2026
+# Nexus manifest outage, so the corpus never ran and the tests.cases below are the only
+# regression guard. --fetch covers every upload now; route the real catalogue with
+#   pnpm nx run moonlightpeaks:test-corpus -- --fetch
 # See docs/corpus-manifests.md.
 
 game:

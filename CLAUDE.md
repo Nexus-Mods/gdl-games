@@ -14,7 +14,7 @@ to every session.
 |---|---|
 | `game.yaml` DSL: keys, predicates, `take`/`anchor`/`placeAt`, built-in facts, CLI flags | [`gdl/README.md`](gdl/README.md) |
 | Setup, Nx targets, releasing | [`README.md`](README.md) |
-| Corpus verification: how it works, how it fails silently, the manifest outage, the workaround | [`docs/corpus-manifests.md`](docs/corpus-manifests.md) |
+| Corpus verification: how it works, where manifests come from, how it fails silently | [`docs/corpus-manifests.md`](docs/corpus-manifests.md) |
 | What breaks for existing users when you edit a **published** game.yaml | [`docs/published-extension-stability.md`](docs/published-extension-stability.md) |
 | Deployment methods: `supportsSymlinks`, why UE5 IoStore games must refuse symlinks, how a modType path removes a method | [`docs/deployment-methods.md`](docs/deployment-methods.md) |
 | Authoring a **new** game end-to-end | the `implement-game-extension` skill |

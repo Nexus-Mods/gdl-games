@@ -497,13 +497,10 @@ nexus:
 # non-match described in docs/corpus-manifests.md. Revisit only if it is repackaged as one
 # file per download.
 #
-# Running it — `--fetch` alone is NOT enough. It resolves the domain but 404s on
-# UUID-style file uris (the Nexus manifest outage, docs/corpus-manifests.md), then prints
-# "nothing to do" and Nx reports SUCCESS: a vacuous pass. Use the listing tool instead:
-#     node tools/corpus/list-archive.mjs --domain starwarszerocompany --game-id 9987 \
-#       --all --out games/starwarszerocompany/tests/cache
-#     pnpm nx run starwarszerocompany:test-corpus
-# Reconcile the summary's `T total` against the v1 `mods` count before believing it (T
+# Running it:
+#     pnpm nx run starwarszerocompany:test-corpus -- --fetch
+# (The results above came from listings built by hand during the June 2026 manifest
+# outage; --fetch covers every upload now, see docs/corpus-manifests.md.) Reconcile the summary's `T total` against the v1 `mods` count before believing it (T
 # counts archives, and can exceed `mods` when a mod has several files). The cache is
 # gitignored and keyed by file id, so clear it before re-listing after a mod updates — a
 # stale entry routes the OLD archive and looks fine.

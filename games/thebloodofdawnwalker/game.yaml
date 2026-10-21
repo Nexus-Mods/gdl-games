@@ -545,15 +545,10 @@ nexus:
 # destination is right, so only the modType LABEL reads oddly. Do not rename the id: ids
 # are permanent once published.
 #
-# Running it: --fetch does NOT work for this game. Manifests 404 on the UUID-style file
-# uris (the outage in docs/corpus-manifests.md), and the run then prints "nothing to do"
-# and EXITS 0 with Nx reporting success. Use the listing tool, and put 7-Zip on PATH first
-# or .rar/.7z archives are skipped, which hid 3 mods on the first pass:
-#     export PATH="/c/Program Files/7-Zip:$PATH"
-#     node tools/corpus/list-archive.mjs --domain thebloodofdawnwalker --game-id 9719
-#         --all --out games/thebloodofdawnwalker/tests/cache
-#     pnpm nx run thebloodofdawnwalker:test-corpus        # note: NO --fetch
-# Reconcile `T total` against `mods` from
+# Running it:
+#     pnpm nx run thebloodofdawnwalker:test-corpus -- --fetch
+# The results above came from listings built by hand during the June 2026 manifest
+# outage; --fetch covers every upload now (docs/corpus-manifests.md). Reconcile `T total` against `mods` from
 # https://api.nexusmods.com/v1/games/thebloodofdawnwalker.json. That count LAGS
 # publication, so cross-check latest_added for available:true. ALWAYS clear the cache
 # first: it is keyed by file id, so an updated mod leaves the old entry behind and the
