@@ -290,11 +290,12 @@ pnpm nx run <id>:test-corpus -- --fetch --limit 100
 
 ## 6. Template map (copy the closest existing game)
 
-Verified 2026-07-25. Keep this in sync — `tools/audit-docs.mjs` checks that every game is listed.
+Verified 2026-08-18. Keep this in sync — `tools/audit-docs.mjs` checks that every game is listed.
 
 | Closest match | Template | Notes |
 |---|---|---|
 | UE5 + UE4SS, **with hooks** | `games/subnautica2` | `src/hooks.ts` + `discovery.version: { hook }` and `events.did-deploy` (mods.txt regen). No ReShade/native-dll rules. |
+| UE5 + UE4SS + DML + ReShade, **with hooks** | `games/mortalshell2` | Retail-tested Steam layout with `~mods`, LogicMods, UE4SS/DmgModLoader awareness, ReShade/native binary routing, dependency diagnostics, and game-local installer hooks. |
 | UE5 pak + ReShade + loose DLL | `games/solarpunk` | The fullest UE5 set: `pak`, `pak-iostore`, `pak-alt`, `logicmods`, `ue4ss-injector`, `ue4ss-lua` + `-enabled` + `-bare`, `reshade`, `native-dll`, `root`, `content-folder`. |
 | UE5 **+ config/media mods** | `games/halocampaignevolved` | Solarpunk's set **plus** `config-ini` (`${appDataLocal}` user config) and `menu-movie` (asset replacement). Use this when mods aren't all paks — see SKILL.md Step 4. |
 | UE5, **unreleased** game | `games/outward2` | Shows the `# UNVERIFIED` convention for an exe not yet confirmed against a shipping build, and a deferred `nexus:` block. |
