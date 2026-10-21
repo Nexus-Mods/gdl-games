@@ -258,6 +258,19 @@ Notes:
 - Legacy `V1` games (rare) use `https://images.nexusmods.com/images/games/4_3/tile_{id}.jpg`. The
   `game{ id artworkSchema }` GraphQL query tells you which schema a game uses if a URL 404s.
 
+**No Nexus game page yet?** Use Steam's portrait library capsule as a stand-in. It is the same
+2:3 box art. Take its path from SteamCMD appinfo, then fetch the 600×900 `_2x` file from the CDN:
+```sh
+curl -s "https://api.steamcmd.net/v1/info/<appid>"
+# → .data.<appid>.common.library_assets_full.library_capsule.image2x.english
+#   e.g. "<hash>/library_capsule_2x.jpg"
+curl -s -o capsule.jpg \n  "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/<appid>/<hash>/library_capsule_2x.jpg"
+```
+It is a JPEG, so unlike the tile it must be converted. Nothing in this repo encodes WebP, so
+install `sharp` into a scratch folder, resize to 400×600, and encode at WebP q80 (about 50 KB).
+Say in `game.yaml` that it is a stand-in, and swap in the Nexus tile once the game page exists.
+Exemplar: `games/emberville` (its Nexus tile turned out to be the same art).
+
 ## 4. Nexus publish ids for the `nexus:` block
 
 - `modId` = the **site/extension id** the user provided (the extension's mod page on
@@ -302,6 +315,7 @@ Verified 2026-07-25. Keep this in sync — `tools/audit-docs.mjs` checks that ev
 | UE5, unreleased but **Steam appinfo has a launch config** | `games/thebloodofdawnwalker` | The middle case, and the common one for a game in preload: no install, zero mods, but the default-branch `config.launch` entry gives the project folder and exe from shipping configuration rather than a beta codename. Shows how to separate "from a primary source" from "inferred" in the header, keep `stores.xbox` omitted while a Windows.Desktop listing exists but publishes no package, and label a whole `tests.cases` block synthetic. |
 | UE, file-based version + hooks | `games/gothic1remake` | Also has `src/hooks.ts` (`events.did-deploy`) **and** file-based `discovery.version`. Adds `native-gothic-mod`, `ue4ss-injector-repack`. |
 | Non-UE, LocalLow mod folder | `games/paralives` | `${appDataLocalLow}` mod folder, file-based `discovery.version`, settings-override + overlay installers. |
+| Unity/BepInEx, scaffolded **pre-release** | `games/emberville` | Built from an early-access install before the game had a Nexus page; gameart was a Steam capsule stand-in until the tile existed (§3). Its `bepinex-pack` rule keeps the loader's `winhttp.dll`, which a directory-anchored `BepInEx/` rule drops (gdl ignores `take` on a directory anchor). Only the `bepinex` rule has met a real mod so far; copy the loader-pack rule, then verify the rest against your game's corpus. |
 | Non-UE, **minimal** (Unity/BepInEx) | `games/moonlightpeaks` | Smallest complete game: 2 installers (`bepinex`, `root`), 1 validator. Copy its *structure* — but it has **zero comments**, so don't copy its documentation habits (see SKILL.md Step 3b). |
 | Non-UE, proprietary engine | `games/assassinscreedblackflagresynced` | Anvil: `.forge`/`.asi`/ReShade routing. Also the precedent for documenting a catalogue the corpus can't route. |
 | Non-UE, nested-exe layout | `games/007firstlight` | Glacier/RPKG; `executable` under `Retail/`. Also comment-free — structure only. |
