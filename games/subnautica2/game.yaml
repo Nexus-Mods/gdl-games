@@ -23,7 +23,14 @@ game:
   author: Nexus Mods
   nexusDomain: subnautica2
   details:
-    supportsSymlinks: true
+    # UE5 IoStore reads the physical .ucas file size using GetFileAttributesExW.
+    # A Windows file symlink reports zero bytes even though reading its target
+    # returns valid content. A native clock plugin reproduced a negative-size
+    # read at offset 262144; the byte-identical regular file loaded correctly.
+    # Refuse both symlink activators. See docs/deployment-methods.md: hardlink
+    # and move require staging on the game's volume. This flag prevents the
+    # unsafe deployment; it does not provide cross-volume copy deployment.
+    supportsSymlinks: false
     gameProjectFolder: Subnautica2
     ignoreConflicts: [enabled.txt, mods.txt, UE4SS-settings.ini]
     ignoreDeploy: [mods.txt]
