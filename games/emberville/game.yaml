@@ -1,0 +1,419 @@
+gdl: 1
+version: 0.0.1   # extension version: drives info.json, the release tag, and the zip name
+
+# Emberville (Cygnus Cross, developer and publisher): single-player action RPG / town
+# rebuilder. Unity, NOT Unreal: there are no paks, no UE4SS and no IoStore here.
+# Steam app 2295170; Nexus domain emberville (v1 game id 10706, page approved
+# 2026-10-19). Steam lists release as 27 Oct 2026 (appdetails, coming_soon: true;
+# SteamCMD appinfo releasestate "prerelease"). A free demo exists as app 5355880.
+#
+# Scaffolded 2026-10-15 from a pre-release (early-access key) Steam install, buildid
+# 25309190, before the game had a Nexus page or any mods:
+#   * Install root (installdir "Emberville") holds Emberville.exe, UnityPlayer.dll,
+#     UnityCrashHandler64.exe, Emberville_Data/, MonoBleedingEdge/, D3D12/ and
+#     Emberville_BurstDebugInformation_DoNotShip/.
+#   * Engine: Unity 6000.1.17f1 (FileVersion/ProductVersion of both Emberville.exe and
+#     UnityPlayer.dll). Scripting backend is Mono, not IL2CPP: MonoBleedingEdge/ ships and
+#     Emberville_Data/Managed/ holds Assembly-CSharp.dll plus 172 other assemblies. That
+#     makes BepInEx 5 (Mono) the expected loader, as on games/moonlightpeaks.
+#   * No sign of first-party mod support: Managed/ has no Harmony, BepInEx, MoonSharp or
+#     Steamworks/Workshop assemblies, and Assembly-CSharp.dll has no mod/Mods folder
+#     strings. Content ships as Addressables bundles (StreamingAssets/aa) and Wwise
+#     soundbanks (StreamingAssets/Audio), both of which asset mods could target later.
+#   * Version: Emberville.exe reports the UNITY version (6000.1.17.12630483), not the game
+#     version, so Vortex will show that. The game's own bundleVersion is "0.20.13.200",
+#     stored in the binary Emberville_Data/globalgamemanagers. Reading it needs a
+#     discovery.version hook; deferred until there's a reason to gate on it.
+#   * User data: %USERPROFILE%/AppData/LocalLow/CygnusCross/Emberville (Unity
+#     persistentDataPath, company "CygnusCross" from app.info). Verified after a first
+#     launch on 2026-10-15: it holds Player.log, steam_autocloud.vdf (Steam Cloud) and
+#     Saves/, which held only options.eopt (plain JSON settings) before a game was
+#     started. Player.log shows SaveLoad creating Saves/ there. Window settings go to
+#     HKCU/Software/CygnusCross/Emberville. Nothing below targets either location.
+#   * The first launch wrote nothing into the install folder, and rendered on Direct3D 11
+#     (Player.log), not D3D12, despite the D3D12/ folder. A ReShade proxy would therefore
+#     be d3d11.dll or dxgi.dll, both already kept out of bepinex-plugin.
+#
+# Supports: the BepInEx loader pack, BepInEx-shaped archives, bare BepInEx plugin DLLs,
+# and whole-folder "root" mods. The ladder is the BepInEx convention. Only the bepinex
+# and bepinex-pack rules have been seen on real Emberville mods so far; see CORPUS STATE.
+#
+# CORPUS STATE (2026-10-27): 2 mods published, 2 routed, 2 validators passing.
+#   mod 1 "Stat Sliders" (Grimpil): BepInEx/plugins/StatSliders.dll → bepinex.
+#   mod 2 "Multiplayer x Infinite Dungeon x Boss Rush Arena" (sabba2u): a 55-file modpack
+#     bundling the BepInEx loader (winhttp.dll, doorstop_config.ini, BepInEx/core) with
+#     nine plugins and root-level READMEs → bepinex-pack, every file kept. A
+#     directory-anchored BepInEx/ rule would drop winhttp.dll and the loader would never run.
+# Reproduce with
+#   pnpm nx run emberville:test-corpus -- --fetch
+# See docs/corpus-manifests.md.
+#
+# gameart.webp is the Nexus tile, saved as-is (recipe §3), 2026-10-20. It is the same
+# box art as the Steam library capsule that stood in for it before the page existed.
+#
+# Not added, and why:
+#   * supportsSymlinks. That key exists for UE5 IoStore games (docs/deployment-methods.md).
+#     Vortex only tests `=== false`, so writing `true` would claim a check never made.
+# ===============================================================================
+
+game:
+  id: emberville
+  name: Emberville
+  # Verified on the install above. The SteamCMD appinfo launch config is hidden behind an
+  # access token for this prerelease app, so the install is the only source.
+  executable: Emberville.exe
+  # A discovery fingerprint: every entry must exist, no globs. Steam is the only store, so
+  # the exe at the install root is enough.
+  requiredFiles: [Emberville.exe]
+  logo: gameart.webp
+  author: Nexus Mods
+  nexusDomain: emberville
+
+#   steam: 2295170, from appmanifest_2295170.acf on the local install, matching the
+#          Steam store appdetails (name "Emberville", developer/publisher Cygnus Cross).
+#   epic:  OMITTED. egdata autocomplete for "Emberville" returns no results (2026-10-15).
+#   xbox:  OMITTED. A storeedgefd v9.0 search for "Emberville" returns only unrelated
+#          titles (2026-10-15). No Identity Name to match. Xbox would need THREE values;
+#          see recipe §2.
+stores:
+  steam: "2295170"
+
+context:
+  # BepInEx 5 creates BepInEx/plugins on first run; created up front so a plugin can
+  # deploy before the loader has ever run.
+  pluginsPath: ${installPath}/BepInEx/plugins
+
+modTypes:
+  # Rename freely until the first release. After that these ids are permanent (rule 6 in
+  # CLAUDE.md): Vortex stores the id against every installed mod.
+  - { id: emberville-root,    name: "Root (game folder)",    path: "${installPath}" }
+  # Resolves to the install root, like root. The BepInEx/ prefix rides along in each
+  # file's relative path, so the separate id only labels the mod type in Vortex's UI.
+  - { id: emberville-bepinex, name: "BepInEx (game folder)", path: "${installPath}" }
+  - { id: emberville-plugin,  name: "BepInEx plugin",        path: "${pluginsPath}" }
+
+installers:
+  # --- Priority 5: the BepInEx loader pack (winhttp.dll beside BepInEx/) ---
+  # Anchored on the FILE winhttp.dll, so take: parent makes the folder holding it the
+  # install root and the pack's root files (winhttp.dll, doorstop_config.ini,
+  # .doorstop_version) land beside Emberville.exe, where Doorstop needs them.
+  # The bepinex rule below can't do this: gdl ignores `take` on a directory-shaped anchor
+  # ("**/BepInEx/") and keeps only files under that directory, which drops winhttp.dll.
+  # The loader then installs but never runs. games/moonlightpeaks has that rule alone.
+  # Keyed on BepInEx.Preloader.dll and doorstop_config.ini, which only the loader ships,
+  # not merely on winhttp.dll: a plugin bundling its own winhttp.dll under
+  # BepInEx/plugins/Foo/ would otherwise anchor there and be flattened into the game root.
+  - id: bepinex-pack
+    priority: 5
+    when:
+      all:
+        - { hasFile: "**/winhttp.dll" }
+        - { hasFile: "**/doorstop_config.ini" }
+        - { hasFile: "**/BepInEx/core/BepInEx.Preloader.dll" }
+    anchor: "**/winhttp.dll"
+    take: parent
+    placeAt: "${installPath}"
+    modType: emberville-bepinex
+
+  # --- Priority 10: anything else carrying a BepInEx/ folder ---
+  # Keeps the BepInEx/ subtree only, which strips any wrapper folder. EVERYTHING beside
+  # BepInEx/ is dropped: a readme, but also an Emberville_Data/ tree shipped alongside
+  # BepInEx/plugins. Acceptable until a real mod has that shape; then it needs its own rule.
+  - id: bepinex
+    priority: 10
+    when: { hasFile: "**/BepInEx/**" }
+    anchor: "**/BepInEx/"
+    take: self
+    placeAt: "${installPath}"
+    modType: emberville-bepinex
+
+  # --- Priority 20: a bare plugin DLL (no BepInEx/ wrapper) -> BepInEx/plugins ---
+  # Departs from games/moonlightpeaks, which sends a bare DLL to the game root, where
+  # BepInEx never loads it. Folder structure under the archive root is kept, so
+  # MyMod/MyMod.dll becomes BepInEx/plugins/MyMod/MyMod.dll.
+  # The unless arms keep game-relative and loader archives out:
+  #   * winhttp.dll / doorstop_config.ini: a loader or Doorstop build without BepInEx/.
+  #   * Proxy DLLs (dxgi, d3d11, d3d12, dinput8, version, winmm) and ReShade.ini: ReShade
+  #     and other injectors load from beside the exe, never from plugins.
+  #   * Emberville_Data/, MonoBleedingEdge/, D3D12/, UnityPlayer.dll: game-relative trees
+  #     (e.g. a patched Managed/ assembly). They must deploy from the install root.
+  #   * patchers/ / monomod/: BepInEx preloader patchers, which do NOT load from plugins.
+  # Known gap: a bare patchers/ tree falls through to root and lands beside the exe, but
+  # BepInEx loads patchers from BepInEx/patchers, so it still won't load. The arm also
+  # matches a patchers/ folder nested inside a plugin. Add a rule once a real one appears.
+  # Known gap: an archive rooted at plugins/X.dll (no BepInEx/ prefix) lands at
+  # BepInEx/plugins/plugins/X.dll. Add a rule if real uploads use that shape.
+  - id: bepinex-plugin
+    priority: 20
+    when: { hasFile: "**/*.dll" }
+    unless:
+      any:
+        - { hasFile: "**/{winhttp.dll,doorstop_config.ini,ReShade.ini}" }
+        - { hasFile: "**/{dxgi,d3d11,d3d12,dinput8,version,winmm}.dll" }
+        - { hasFile: "**/{Emberville_Data,MonoBleedingEdge,D3D12}/**" }
+        - { hasFile: "**/UnityPlayer.dll" }
+        - { hasFile: "**/{patchers,monomod}/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${pluginsPath}"
+    modType: emberville-plugin
+
+  # --- Priority 30: everything else keeps its layout from the install root ---
+  - id: root
+    priority: 30
+    when: { hasFile: "**/*" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}"
+    modType: emberville-root
+
+setup:
+  ensureDirs:
+    - ${pluginsPath}
+
+toolbarActions:
+  - { id: open-nexus-page, title: Open Nexus Page, priority: 200, target: { openUrl: "https://www.nexusmods.com/emberville" } }
+
+nexus:
+  modId: 2480            # nexusmods.com/site/mods/2480 (the Vortex extension page)
+  # Confirmed present via v1 (/games/site/mods/2480.json → mod_id 2480, game_id 2295,
+  # uid 9856949946800, created 2026-10-21) and v2 (name "Emberville Vortex Extension").
+  # Status "not_published" / available: false, expected for an unreleased extension.
+  fileGroupId: 8205366
+  # NOT verifiable through the API while the page is unpublished and has no files
+  # (v1 /files.json returns 403; v2 modFiles returns []). Supplied by the maintainer
+  # on 2026-10-21 from the upload page.
+  displayName: Emberville Support for Vortex
+
+validators:
+  # gdl validators read only `when`: an `unless` key is silently ignored. Exclusions
+  # are therefore written as `not` arms inside `when`.
+  - id: bepinex-loader
+    name: The BepInEx loader pack routes to bepinex-pack, keeping winhttp.dll
+    when:
+      all:
+        - { hasFile: "**/winhttp.dll" }
+        - { hasFile: "**/doorstop_config.ini" }
+        - { hasFile: "**/BepInEx/core/BepInEx.Preloader.dll" }
+    assert:
+      matched: bepinex-pack
+      modType: emberville-bepinex
+  - id: bepinex-folder
+    name: Other archives containing a BepInEx/ folder deploy from the game install root
+    when:
+      all:
+        - { hasFile: "**/BepInEx/**" }
+        - { not: { hasFile: "**/BepInEx/core/BepInEx.Preloader.dll" } }
+    assert:
+      matched: bepinex
+      modType: emberville-bepinex
+  - id: game-relative-tree
+    name: Archives carrying Emberville_Data/ never land under BepInEx/plugins
+    when:
+      all:
+        - { hasFile: "**/Emberville_Data/**" }
+        - { not: { hasFile: "**/BepInEx/**" } }
+    assert:
+      matched: root
+      modType: emberville-root
+
+tests:
+  corpus: nexus
+  # Cases marked REAL are listings of real archives: the BepInEx loader release and
+  # Emberville mods 1 and 2 (mod 2 abridged). The rest are SYNTHETIC shapes labelled as
+  # such. Swap in real listings as mods appear.
+  cases:
+    # REAL SHAPE, Emberville mod 1 ("Stat Sliders" by Grimpil), file 2, StatSliders
+    # 0.1.1, the first mod published for the game. Verbatim listing.
+    - name: "bepinex: Stat Sliders plugin keeps its BepInEx/plugins path"
+      archive:
+        - BepInEx/plugins/StatSliders.dll
+      expect:
+        matched: bepinex
+        modType: emberville-bepinex
+        plan:
+          - ${installPath}/BepInEx/plugins/StatSliders.dll
+
+    # REAL SHAPE: BepInEx_win_x64_5.4.23.5.zip from github.com/BepInEx/BepInEx releases
+    # (latest on 2026-10-15), with BepInEx/core cut to a subset of its files.
+    - name: "bepinex-pack: BepInEx 5 loader pack keeps winhttp.dll beside the exe"
+      archive:
+        - .doorstop_version
+        - changelog.txt
+        - doorstop_config.ini
+        - winhttp.dll
+        - BepInEx/core/0Harmony.dll
+        - BepInEx/core/BepInEx.dll
+        - BepInEx/core/BepInEx.Preloader.dll
+      expect:
+        matched: bepinex-pack
+        modType: emberville-bepinex
+        plan:
+          - ${installPath}/.doorstop_version
+          - ${installPath}/changelog.txt
+          - ${installPath}/doorstop_config.ini
+          - ${installPath}/winhttp.dll
+          - ${installPath}/BepInEx/core/0Harmony.dll
+          - ${installPath}/BepInEx/core/BepInEx.dll
+          - ${installPath}/BepInEx/core/BepInEx.Preloader.dll
+
+    # REAL SHAPE, Emberville mod 2 ("Multiplayer x Infinite Dungeon x Boss Rush Arena" by
+    # sabba2u), file 3, abridged from 55 files to one of each kind: the loader's root files,
+    # a core file, a plugin, a nested plugin asset and a root README. The root files must
+    # all land beside the exe.
+    - name: "bepinex-pack: modpack bundling the loader keeps winhttp.dll and its READMEs"
+      archive:
+        - .doorstop_version
+        - doorstop_config.ini
+        - winhttp.dll
+        - README-EmbervilleModPack.txt
+        - BepInEx/config/BepInEx.cfg
+        - BepInEx/core/BepInEx.Preloader.dll
+        - BepInEx/plugins/BetterChests/BetterChests.dll
+        - BepInEx/plugins/EmbervilleMultiplayer/Assets/Images/betterandonline.png
+      expect:
+        matched: bepinex-pack
+        modType: emberville-bepinex
+        plan:
+          - ${installPath}/.doorstop_version
+          - ${installPath}/doorstop_config.ini
+          - ${installPath}/winhttp.dll
+          - ${installPath}/README-EmbervilleModPack.txt
+          - ${installPath}/BepInEx/config/BepInEx.cfg
+          - ${installPath}/BepInEx/core/BepInEx.Preloader.dll
+          - ${installPath}/BepInEx/plugins/BetterChests/BetterChests.dll
+          - ${installPath}/BepInEx/plugins/EmbervilleMultiplayer/Assets/Images/betterandonline.png
+
+    # SYNTHETIC: the same pack re-uploaded inside a wrapper folder. The wrapper is
+    # stripped and the root files still come along.
+    - name: "bepinex-pack: wrapped loader pack strips the wrapper"
+      archive:
+        - BepInEx_win_x64_5.4.23.5/doorstop_config.ini
+        - BepInEx_win_x64_5.4.23.5/winhttp.dll
+        - BepInEx_win_x64_5.4.23.5/BepInEx/core/BepInEx.dll
+        - BepInEx_win_x64_5.4.23.5/BepInEx/core/BepInEx.Preloader.dll
+      expect:
+        matched: bepinex-pack
+        modType: emberville-bepinex
+        plan:
+          - ${installPath}/doorstop_config.ini
+          - ${installPath}/winhttp.dll
+          - ${installPath}/BepInEx/core/BepInEx.dll
+          - ${installPath}/BepInEx/core/BepInEx.Preloader.dll
+
+    # SYNTHETIC guard for bepinex-pack's loader-only predicate: a plugin bundling its own
+    # winhttp.dll must keep its BepInEx/plugins path, not be flattened into the game root.
+    - name: "bepinex: plugin bundling winhttp.dll is not mistaken for the loader"
+      archive:
+        - BepInEx/plugins/Foo/Foo.dll
+        - BepInEx/plugins/Foo/winhttp.dll
+      expect:
+        matched: bepinex
+        modType: emberville-bepinex
+        plan:
+          - ${installPath}/BepInEx/plugins/Foo/Foo.dll
+          - ${installPath}/BepInEx/plugins/Foo/winhttp.dll
+
+    # SYNTHETIC: a plugin shipped with its BepInEx/plugins prefix and a wrapper folder.
+    - name: "bepinex: wrapped BepInEx/plugins archive strips the wrapper"
+      archive:
+        - MyMod v1.0/BepInEx/plugins/MyMod/MyMod.dll
+        - MyMod v1.0/BepInEx/config/com.author.mymod.cfg
+      expect:
+        matched: bepinex
+        modType: emberville-bepinex
+        plan:
+          - ${installPath}/BepInEx/plugins/MyMod/MyMod.dll
+          - ${installPath}/BepInEx/config/com.author.mymod.cfg
+
+    # SYNTHETIC: the most common BepInEx upload, a lone plugin DLL.
+    - name: "bepinex-plugin: bare DLL goes to BepInEx/plugins"
+      archive:
+        - MyMod.dll
+      expect:
+        matched: bepinex-plugin
+        modType: emberville-plugin
+        plan:
+          - ${installPath}/BepInEx/plugins/MyMod.dll
+
+    # SYNTHETIC: plugin in its own folder; the folder is kept under plugins.
+    - name: "bepinex-plugin: plugin folder is kept under BepInEx/plugins"
+      archive:
+        - MyMod/MyMod.dll
+        - MyMod/README.md
+      expect:
+        matched: bepinex-plugin
+        modType: emberville-plugin
+        plan:
+          - ${installPath}/BepInEx/plugins/MyMod/MyMod.dll
+          - ${installPath}/BepInEx/plugins/MyMod/README.md
+
+    # SYNTHETIC guard for the Emberville_Data unless arm: remove it and this DLL lands in
+    # BepInEx/plugins/Emberville_Data/Managed, where the game never reads it.
+    - name: "root: game-relative Managed assembly is not treated as a plugin"
+      archive:
+        - Emberville_Data/Managed/Assembly-CSharp.dll
+      expect:
+        matched: root
+        modType: emberville-root
+        plan:
+          - ${installPath}/Emberville_Data/Managed/Assembly-CSharp.dll
+
+    # SYNTHETIC guard for the ReShade/dxgi unless arm: a ReShade proxy must sit beside
+    # the exe, not under plugins.
+    - name: "root: ReShade proxy and preset stay at the game root"
+      archive:
+        - dxgi.dll
+        - ReShade.ini
+        - ReShadePreset.ini
+      expect:
+        matched: root
+        modType: emberville-root
+        plan:
+          - ${installPath}/dxgi.dll
+          - ${installPath}/ReShade.ini
+          - ${installPath}/ReShadePreset.ini
+
+    # SYNTHETIC guard for the proxy-DLL unless arm: an injector proxy sits beside the exe.
+    - name: "root: proxy DLL stays at the game root"
+      archive:
+        - version.dll
+      expect:
+        matched: root
+        modType: emberville-root
+        plan:
+          - ${installPath}/version.dll
+
+    # SYNTHETIC guard for the patchers unless arm: preloader patchers never load from
+    # plugins, so a patchers/ tree must not be pushed under it.
+    - name: "root: patchers tree is not treated as a plugin"
+      archive:
+        - patchers/MyPatcher.dll
+      expect:
+        matched: root
+        modType: emberville-root
+        plan:
+          - ${installPath}/patchers/MyPatcher.dll
+
+    # SYNTHETIC guard for the winhttp/doorstop unless arm: a Doorstop-only drop must not
+    # be pushed under plugins.
+    - name: "root: Doorstop proxy without BepInEx/ stays at the game root"
+      archive:
+        - winhttp.dll
+        - doorstop_config.ini
+      expect:
+        matched: root
+        modType: emberville-root
+        plan:
+          - ${installPath}/winhttp.dll
+          - ${installPath}/doorstop_config.ini
+
+    # SYNTHETIC: non-DLL loose files fall through to root unchanged.
+    - name: "root: loose non-DLL files keep their layout"
+      archive:
+        - Emberville_Data/StreamingAssets/Audio/GeneratedSoundBanks/Windows/Music.bnk
+      expect:
+        matched: root
+        modType: emberville-root
+        plan:
+          - ${installPath}/Emberville_Data/StreamingAssets/Audio/GeneratedSoundBanks/Windows/Music.bnk
