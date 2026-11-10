@@ -1,0 +1,966 @@
+gdl: 1
+version: 0.0.1   # extension version: drives info.json, the release tag, and the zip name
+
+# Satisfactory (Coffee Stain Studios / Coffee Stain Publishing): first-person open-world
+# factory building game.
+# Steam app 526870; Epic artifactId CrabEA; Nexus domain satisfactory (v1/v2 game id 2904).
+#
+# Verified on 2026-11-10 against a real Steam install (build 26281294, UE 5.6.1.0,
+# ++FactoryGame+rel-main-multiplayer-patch-CL-517554) and the 30 published mods on Nexus.
+#
+# Sources:
+#   * Steam app 526870, developer Coffee Stain Studios, publisher Coffee Stain Publishing:
+#     SteamCMD appinfo and local steamapps/appmanifest_526870.acf (installdir "Satisfactory",
+#     default launch entry FactoryGameSteam.exe).
+#   * Epic artifactId CrabEA: egdata sandbox `crab` assets (installedSizeBytes 30,305,765,527,
+#     platform Windows; CrabTest is the Experimental branch).
+#   * Unreal Engine 5.6.1 modular build: VersionInfo on FactoryGameSteam.exe and
+#     Engine/Binaries/Win64/FactoryGameSteam-Win64-Shipping.exe.
+#   * Nexus domain satisfactory, game id 2904: v2 GraphQL game(domainName: "satisfactory").
+#
+# Install layout (Steam, seen on disk). Like games/phantombladezero, this is NOT a standard
+# monolithic UE layout where the shipping exe sits in <Project>/Binaries/Win64:
+#   Satisfactory/
+#     FactoryGameSteam.exe     217 KB bootstrap launcher (BootstrapPackagedGame-Win64-Shipping.exe)
+#                              on Steam; FactoryGameEGS.exe on Epic.
+#     Engine/Binaries/Win64/   holds the real shipping executable
+#                              (FactoryGameSteam-Win64-Shipping.exe on Steam,
+#                              FactoryGameEGS-Win64-Shipping.exe on Epic) plus modular engine
+#                              DLLs. ReShade, ShaderToggler, UE4SS and proxy DLLs (dwmapi.dll,
+#                              dxgi.dll, xinput1_3.dll) go beside the shipping exe here.
+#     FactoryGame/             the UE project folder (confirmed by Manifest_NonUFSFiles_Win64.txt).
+#                              FactoryGame/Binaries/Win64 holds only modular game DLLs
+#                              (FactoryGameSteam-FactoryGame-Win64-Shipping.dll, etc.), no exe.
+#                              Paks live in FactoryGame/Content/Paks, with global.utoc (2,982 B)
+#                              and global.ucas alongside FactoryGame-Windows.{pak,sig,ucas,utoc},
+#                              confirming IoStore.
+#     FactoryGame/Mods/        Satisfactory Mod Loader (SML) plugin mods (<Mod>/<Mod>.uplugin).
+#     CommunityResources/      CustomVersions.json, DedicatedServerAPIDocs.md, FactoryGame.usmap.
+#   User config lives in %LOCALAPPDATA%/FactoryGame/Saved/Config/Windows (Engine.ini,
+#   GameUserSettings.ini), and blueprints/saves live under %LOCALAPPDATA%/FactoryGame/Saved/SaveGames.
+#
+# Supports the UE5 ladder from games/phantombladezero (pak mods in Content/Paks/~mods,
+# IoStore-only mods, LogicMods, UE4SS loader + Lua + C++ mods, ReShade presets, loose
+# native DLLs, Engine.ini tweaks, and game-relative or wrapped "root" mods), plus SML
+# (.uplugin) mods under FactoryGame/Mods.
+#
+# gameart.webp is the Nexus tile (https://images.nexusmods.com/images/games/v2/2904/tile.jpg),
+# saved as-is (recipe §3), 2026-11-10.
+#
+# ===============================================================================
+
+game:
+  id: satisfactory
+  name: Satisfactory
+  # The root bootstrap launcher differs by store: FactoryGameSteam.exe on Steam (confirmed
+  # via SteamCMD config.launch.0 and on disk), FactoryGameEGS.exe on Epic (# unverified —
+  # from Epic community/support docs; confirm against a real Epic install). Both report the
+  # same UE FileVersion as the nested Engine/Binaries/Win64 shipping exe.
+  executable:
+    storeBranch:
+      epic: FactoryGameEGS.exe          # unverified — confirm on a real Epic install
+      default: FactoryGameSteam.exe
+  # A discovery fingerprint, not the launch target; every entry must exist (no globs).
+  # Because the root exe name differs between Steam and Epic, point requiredFiles at the
+  # IoStore container header present at the same relative path on both stores (verified on
+  # the Steam install: FactoryGame/Content/Paks/global.utoc, 2,982 bytes).
+  requiredFiles: [FactoryGame/Content/Paks/global.utoc]
+  logo: gameart.webp
+  author: Nexus Mods
+  nexusDomain: satisfactory
+  details:
+    # UE5 IoStore games crash on symlinked .utoc/.ucas (games/starwarszerocompany, verified
+    # 2026-08-30), so symlink deployment is refused. Vortex only tests `=== false`. This
+    # game is IoStore (FactoryGame/Content/Paks/global.utoc on disk).
+    supportsSymlinks: false
+    gameProjectFolder: FactoryGame
+    ignoreConflicts: [UE4SS-settings.ini, enabled.txt]
+
+#   steam: 526870, confirmed via SteamCMD appinfo and local appmanifest_526870.acf.
+#   epic:  CrabEA, confirmed via egdata sandbox `crab` assets (the live/stable Windows
+#          artifactId; CrabTest is the Experimental branch).
+#   xbox:  OMITTED. No Microsoft Store PC listing (storeedgefd Windows.Desktop search for
+#          "Satisfactory" on 2026-11-10 returned no Satisfactory packages).
+stores:
+  steam: "526870"
+  epic: "CrabEA"
+
+context:
+  gamePath: ${installPath}/FactoryGame
+
+  pakModsPath:   ${gamePath}/Content/Paks/~mods
+  logicModsPath: ${gamePath}/Content/Paks/LogicMods
+  paksPath:      ${gamePath}/Content/Paks
+  contentPath:   ${gamePath}/Content
+  smlModsPath:   ${gamePath}/Mods
+
+  # Satisfactory is a modular UE5 build: the shipping exe
+  # (FactoryGameSteam-Win64-Shipping.exe / FactoryGameEGS-Win64-Shipping.exe) sits in
+  # Engine/Binaries/Win64, while FactoryGame/Binaries/Win64 contains only modular DLLs.
+  # ReShade, ShaderToggler, UE4SS and proxy DLL plugins sit next to the shipping exe.
+  binariesPath:  ${installPath}/Engine/Binaries/Win64
+  ue4ssRootPath: ${binariesPath}/ue4ss
+  ue4ssModsPath: ${binariesPath}/ue4ss/Mods
+
+  # Standard UE5 user config path under %LOCALAPPDATA%/FactoryGame/Saved/Config/Windows
+  # (# unverified on disk — %LOCALAPPDATA% is outside the build sandbox; confirmed as
+  # Windows for UE5 Satisfactory 1.0+ via official support docs).
+  configPath: ${appDataLocal}/FactoryGame/Saved/Config/Windows
+
+modTypes:
+  # Rename freely until the first release. After that these ids are permanent (rule 6 in
+  # CLAUDE.md): Vortex stores the id against every installed mod.
+  - { id: satisfactory-pak,            name: "Paks (~mods)",               path: "${pakModsPath}" }
+  # Deploys under Content/Paks; the LogicMods/ subfolder rides along in each file's
+  # stripped relative path (so placeAt == this path; see GDL114).
+  - { id: satisfactory-logicmods,      name: "LogicMods (Blueprint paks)", path: "${paksPath}" }
+  - { id: satisfactory-sml,            name: "SML Mods (FactoryGame/Mods)", path: "${smlModsPath}" }
+  - { id: satisfactory-ue4ss,          name: "UE4SS (Lua mods)",           path: "${ue4ssModsPath}" }
+  - { id: satisfactory-ue4ss-injector, name: "UE4SS (loader)",             path: "${binariesPath}" }
+  - { id: satisfactory-binaries,       name: "Binaries (ReShade / DLL plugins)", path: "${binariesPath}" }
+  - { id: satisfactory-root,           name: "Root (game folder)",         path: "${installPath}" }
+  - { id: satisfactory-contentfolder,  name: "Content folder",             path: "${gamePath}" }
+  # Deploys under Content/; the Paks/ subfolder rides along in each file's stripped
+  # relative path (so placeAt == this path; see GDL114).
+  - { id: satisfactory-pakalt,         name: "Paks (no ~mods)",            path: "${contentPath}" }
+  # deploymentEssential: false is load-bearing. This is the only modType off the game
+  # drive, and Vortex drops a deployment method that can't handle ANY registered modType.
+  # Hardlink and move need the target on the staging folder's volume, so for a game on D:
+  # this one path on C: removed both, and with symlinks refused that left no deployment
+  # method at all (reproduced on starwarszerocompany 2026-08-31). `false` demotes the
+  # rejection to a warning. See docs/deployment-methods.md.
+  - { id: satisfactory-config,         name: "Config (Engine.ini tweaks)", path: "${configPath}",
+      deploymentEssential: false }
+
+# The ladder below follows games/phantombladezero's UE5 rules with the project folder set to
+# FactoryGame, plus sml-mod (priority 21) for SML plugin packages shipping a .uplugin file
+# (Nexus mods 16 and 46).
+installers:
+  # --- Priority 15: UE4SS loader (dwmapi/xinput proxy or UE4SS-settings.ini) → Binaries ---
+  # The `unless` is load-bearing: `take: parent` resolves the install root to
+  # the loader's folder and drops every file outside it, so a game-relative archive
+  # shipping the loader AND a pak would lose the pak (halocampaignevolved mod 68). Declining
+  # game-relative archives hands them to `root` (16), which deploys the tree intact.
+  - id: ue4ss-injector
+    priority: 15
+    when: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    unless:
+      any:
+        - { hasFile: "FactoryGame/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: satisfactory-ue4ss-injector
+
+  # --- Priority 16: Root (game-relative archives laid out from the install root) ---
+  # After the loader, before logicmods/sml-mod/ue4ss-lua/pak, so a MIXED game-relative mod
+  # lands every file instead of one rule claiming part of it. Also covers FactoryGame/Content/Splash
+  # replacements (Satisfactory mod 34, No-Splash) and Engine/Binaries/Win64 ShaderToggler bundles
+  # (Satisfactory mod 48, No-HUD-No-Effects) when laid out from the root.
+  - id: root
+    priority: 16
+    when:
+      any:
+        - { hasFile: "FactoryGame/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${installPath}"
+    modType: satisfactory-root
+
+  # --- Priority 16.5: the same game-relative tree, wrapped in a folder ---
+  # `root` anchors at the archive root, so a wrapped tree matches nothing and installs zero
+  # files, silently (six mods on halocampaignevolved). stripCommonRoot keeps files outside
+  # the game tree (a README) and spans FactoryGame/ and Engine/, which a directory
+  # anchor can't.
+  - id: wrapped-root
+    priority: 16.5
+    when:
+      all:
+        - any:
+            - { hasFile: "**/FactoryGame/**" }
+            - { hasFile: "**/Engine/**" }
+        - not: { hasFile: "FactoryGame/**" }
+        - not: { hasFile: "Engine/**" }
+    copy: { stripCommonRoot: true }
+    modType: satisfactory-root
+
+  # --- Priority 17: Content folder (project-relative trees: Content/, Config/, Binaries/, Mods/) ---
+  - id: content-folder
+    priority: 17
+    when:
+      any:
+        - { hasFile: "Content/**" }
+        - { hasFile: "Config/**" }
+        - { hasFile: "Binaries/**" }
+        - { hasFile: "Mods/**" }
+    anchor: "**/*"
+    take: archive-root
+    placeAt: "${gamePath}"
+    modType: satisfactory-contentfolder
+
+  # --- Priority 18: ReShade preset (ReShade.ini, strip wrapper) → Binaries ---
+  - id: reshade
+    priority: 18
+    when: { hasFile: "**/ReShade.ini" }
+    unless:
+      any:
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/*/*.uplugin" }
+    anchor: "**/ReShade.ini"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: satisfactory-binaries
+
+  # --- Priority 19: UE user-config tweak (Engine.ini etc.) → %LOCALAPPDATA% Saved/Config ---
+  # Both spellings ship, hence the brace list. The `unless` arms keep a config bundled WITH
+  # real payload on that payload's rule; tests.cases asserts the pak guard. This brace list
+  # must stay in sync with reshade-preset's.
+  - id: config-ini
+    priority: 19
+    when:
+      hasFile: "**/{Engine.ini,engine.ini,Game.ini,game.ini,GameUserSettings.ini,gameusersettings.ini,Input.ini,input.ini,Scalability.ini,scalability.ini}"
+    unless:
+      any:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/*.utoc" }
+        - { hasFile: "**/*.uplugin" }
+        - { hasFile: "**/*.{dll,addon64,addon}" }
+        - { hasFile: "**/*.lua" }
+        - { hasFile: "FactoryGame/**" }
+        - { hasFile: "Engine/**" }
+    anchor: "**/{Engine.ini,engine.ini,Game.ini,game.ini,GameUserSettings.ini,gameusersettings.ini,Input.ini,input.ini,Scalability.ini,scalability.ini}"
+    take: parent
+    placeAt: "${configPath}"
+    modType: satisfactory-config
+
+  # --- Priority 19.5: bare ReShade PRESET .ini (not ReShade.ini itself) → Binaries ---
+  # Satisfactory mod 33 (Industrial Drift Inc. ReShade) and mod 48 (ShaderToggler.ini) ship
+  # preset/addon .ini files for the shipping exe folder. After config-ini on purpose, and
+  # excluding the UE config names, so an Engine.ini keeps its user-config routing.
+  - id: reshade-preset
+    priority: 19.5
+    when: { hasFile: "**/*.ini" }
+    unless:
+      any:
+        - { hasFile: "**/{Engine.ini,engine.ini,Game.ini,game.ini,GameUserSettings.ini,gameusersettings.ini,Input.ini,input.ini,Scalability.ini,scalability.ini}" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/*.utoc" }
+        - { hasFile: "**/*.uplugin" }
+        - { hasFile: "**/*.{dll,addon64,addon}" }
+        - { hasFile: "**/*.lua" }
+        - { hasFile: "**/FactoryGame/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/*.ini"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: satisfactory-binaries
+
+  # --- Priority 20: LogicMods (Blueprint paks under LogicMods/) → Content/Paks ---
+  - id: logicmods
+    priority: 20
+    when: { hasFile: "**/LogicMods/**" }
+    anchor: "**/LogicMods/"
+    take: self
+    placeAt: "${paksPath}"
+    modType: satisfactory-logicmods
+
+  # --- Priority 21: SML plugin mod (<Mod>/<Mod>.uplugin) → FactoryGame/Mods ---
+  # Satisfactory mods 16 (Super Alternate Recipes) and 46 (Tardis Mod Redux) are SML
+  # plugins packaged as <ModReference>/<ModReference>.uplugin + Content/Paks/Windows/*.
+  # Taking parent.parent on the .uplugin file keeps the <ModReference>/ folder intact
+  # inside FactoryGame/Mods/, even if wrapped in a version-named outer folder.
+  - id: sml-mod
+    priority: 21
+    when: { hasFile: "**/*/*.uplugin" }
+    unless:
+      any:
+        - { hasFile: "**/FactoryGame/**" }
+        - { hasFile: "**/Engine/**" }
+    anchor: "**/*/*.uplugin"
+    take: parent.parent
+    placeAt: "${smlModsPath}"
+    modType: satisfactory-sml
+
+  # --- Priority 22: UE4SS Lua (Scripts/*.lua present) → ue4ss/Mods ---
+  - id: ue4ss-lua
+    priority: 22
+    when: { hasFile: "**/Scripts/*.lua" }
+    unless:
+      any:
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/*/*.uplugin" }
+    anchor: "**/Scripts/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: satisfactory-ue4ss
+
+  # --- Priority 23: UE4SS mod keyed by enabled.txt only (e.g. a dll payload) → ue4ss/Mods ---
+  - id: ue4ss-lua-enabled
+    priority: 23
+    when: { hasFile: "**/enabled.txt" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/*/*.uplugin" }
+    anchor: "**/enabled.txt"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: satisfactory-ue4ss
+
+  # --- Priority 23.5: UE4SS C++ mod (<Mod>/dlls/main.dll, no enabled.txt) → ue4ss/Mods ---
+  - id: ue4ss-cpp
+    priority: 23.5
+    when: { hasFile: "**/dlls/main.dll" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/*/*.uplugin" }
+    anchor: "**/dlls/main.dll"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: satisfactory-ue4ss
+
+  # --- Priority 24: UE4SS Lua (bare .lua, no Scripts/ dir) → ue4ss/Mods ---
+  - id: ue4ss-lua-bare
+    priority: 24
+    when: { hasFile: "**/*.lua" }
+    unless:
+      any:
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/enabled.txt" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/*/*.uplugin" }
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+    anchor: "**/*.lua"
+    take: parent.parent
+    placeAt: "${ue4ssModsPath}"
+    modType: satisfactory-ue4ss
+
+  # --- Priority 27: Loose native DLL / ReShade addon (.addon64/.addon) → Binaries ---
+  - id: native-dll
+    priority: 27
+    when: { hasFile: "**/*.{dll,addon64,addon}" }
+    unless:
+      any:
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - { hasFile: "**/ue4ss/**" }
+        - { hasFile: "**/ReShade.ini" }
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/*.uplugin" }
+        - { hasFile: "**/Scripts/*.lua" }
+        - { hasFile: "**/FactoryGame/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/*.{dll,addon64,addon}"
+    take: parent
+    placeAt: "${binariesPath}"
+    modType: satisfactory-binaries
+
+  # --- Priority 28: A Paks/ folder bundled in the archive (not ~mods) → Content/Paks ---
+  - id: pak-alt
+    priority: 28
+    when:
+      all:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/Paks/**" }
+    unless:
+      any:
+        - { hasFile: "**/~mods/**" }
+        - { hasFile: "**/LogicMods/**" }
+        - { hasFile: "**/*.uplugin" }
+        - { hasFile: "**/FactoryGame/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+    anchor: "**/Paks/"
+    take: self
+    placeAt: "${contentPath}"
+    modType: satisfactory-pakalt
+
+  # --- Priority 29: IO Store mod (utoc/ucas without a .pak) → ~mods ---
+  # A mod carrying BOTH a .pak and a .utoc routes to `pak` (30) instead, which keeps the
+  # triplet together. tests.cases pins that ordering.
+  - id: pak-iostore
+    priority: 29
+    when: { hasFile: "**/*.utoc" }
+    unless:
+      any:
+        - { hasFile: "**/*.pak" }
+        - { hasFile: "**/*.uplugin" }
+        - { hasFile: "**/FactoryGame/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+        - { hasFile: "**/LogicMods/**" }
+    anchor: "**/*.utoc"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: satisfactory-pak
+
+  # --- Priority 30: Default pak mod → flatten into ~mods ---
+  # Covers Satisfactory mods 26 (Protogen Pioneer), 35 (FactoryGame-Windows_ukr.pak),
+  # 49 (OPTaser_P.pak), and 53 (Dublagem PT-BR).
+  - id: pak
+    priority: 30
+    when: { hasFile: "**/*.pak" }
+    unless:
+      any:
+        - { hasFile: "**/*.uplugin" }
+        - { hasFile: "**/FactoryGame/**" }
+        - { hasFile: "**/Engine/**" }
+        - { hasFile: "**/Binaries/**" }
+        - { hasFile: "**/Paks/**" }
+        - { hasFile: "**/LogicMods/**" }
+    anchor: "**/*.pak"
+    take: parent
+    placeAt: "${pakModsPath}"
+    modType: satisfactory-pak
+
+setup:
+  ensureDirs:
+    - ${pakModsPath}
+    - ${smlModsPath}
+    # UE writes the user config dir only on first launch and ships no Engine.ini, so a
+    # config mod deployed before first launch would hit a missing target ("Deployment
+    # target unknown", fixed for games/paralives in 1.3.1).
+    - ${configPath}
+    # Lua mods deploy here, but nothing creates it until the UE4SS loader is installed.
+    # This only stops the deploy failing; the loader is still required.
+    - ${ue4ssModsPath}
+
+toolbarActions:
+  - id: open-ue4ss-settings
+    title: Open UE4SS Settings INI
+    priority: 200
+    target: { openFile: "${ue4ssRootPath}/UE4SS-settings.ini" }
+
+  - id: open-nexus-page
+    title: Open Nexus Page
+    priority: 201
+    target: { openUrl: "https://www.nexusmods.com/satisfactory" }
+
+# nexus: block omitted until the Vortex extension page on nexusmods.com/site is created
+# and its modId + fileGroupId are known (gdl/README.md → Releasing). At release, add:
+#   nexus:
+#     modId: <from nexusmods.com/site>
+#     fileGroupId: <from the Nexus upload page>
+#     displayName: Satisfactory Support for Vortex
+
+# ---------------------------------------------------------------------------------------
+# CORPUS STATE (2026-11-10): 30 published mods on nexusmods.com/satisfactory (confirmed via
+# v2 GraphQL game(domainName: "satisfactory").modCount == 30). Live v3 manifest fetch
+# (`pnpm nx run satisfactory:test-corpus -- --fetch`) requires NEXUS_API_KEY in the
+# environment (legacy S3 file-metadata 404s for this domain).
+# Catalogue breakdown from v2 GraphQL mod + modFiles metadata:
+#   * 9 game/visual/plugin mods routable by these installers:
+#       - mod 16 (Super Alternate Recipes) & mod 46 (Tardis Mod Redux): SML mods → sml-mod
+#       - mod 26 (Protogen Pioneer), mod 35 (ukrainian text localization), mod 49 (OP Taser),
+#         mod 53 (Dublagem PT-BR): pak / IoStore mods → pak
+#       - mod 33 (Industrial Drift Inc. ReShade): ReShade preset → reshade / reshade-preset
+#       - mod 34 (No-Splash): splash replacement → root / wrapped-root
+#       - mod 48 (No-HUD-No-Effects): ShaderToggler ReShade addon + ini → native-dll / root
+#   * 21 uploads are non-mod-manager content (intentionally unmatched per
+#     docs/corpus-manifests.md; 9 + 21 = 30 total):
+#       - 12 Blueprint packs (.sbp/.sbpcfg for per-session SaveGames/blueprints/<sessionName>/,
+#         or .cbp megaprints for the external SCIM web calculator): mods 18, 19, 22, 27, 28,
+#         29, 31, 32, 39, 44, 45, 55.
+#       - 6 Save files (.sav): mods 21, 24, 36, 41, 43, 47.
+#       - 3 Standalone tools / external scripts: mod 30 (PowerShell screenshot script),
+#         mod 38 (Cheat Engine .CT table), mod 52 (Satisfactory Planner standalone app).
+# Refresh when NEXUS_API_KEY is available with:
+#     pnpm nx run satisfactory:test-corpus -- --fetch
+# ---------------------------------------------------------------------------------------
+
+# Validators encode the intended routing so a rule change can't regress it unnoticed. Each
+# is adapted from games/phantombladezero with the project folder set to FactoryGame.
+validators:
+  - id: injector-validator
+    name: UE4SS loader archives (dwmapi/xinput/UE4SS-settings.ini) match ue4ss-injector
+    # Game-relative loader bundles go to `root` by design, so they are excluded here.
+    when:
+      all:
+        - { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "FactoryGame/**" }
+        - not: { hasFile: "Engine/**" }
+    assert: { matched: ue4ss-injector }
+
+  - id: reshade-validator
+    name: ReShade presets (ReShade.ini, no loader) match reshade
+    when:
+      all:
+        - { hasFile: "**/ReShade.ini" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "**/*/*.uplugin" }
+        - not: { hasFile: "**/FactoryGame/**" }
+        - not: { hasFile: "**/Engine/**" }
+        - not: { hasFile: "Content/**" }
+        - not: { hasFile: "Config/**" }
+        - not: { hasFile: "Binaries/**" }
+        - not: { hasFile: "Mods/**" }
+    assert: { matched: reshade }
+
+  - id: sml-mod-validator
+    name: SML plugin archives (**/*/*.uplugin, not game-relative) match sml-mod
+    when:
+      all:
+        - { hasFile: "**/*/*.uplugin" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "**/FactoryGame/**" }
+        - not: { hasFile: "**/Engine/**" }
+        - not: { hasFile: "Content/**" }
+        - not: { hasFile: "Config/**" }
+        - not: { hasFile: "Binaries/**" }
+        - not: { hasFile: "Mods/**" }
+        - not: { hasFile: "**/ReShade.ini" }
+        - not: { hasFile: "**/*.ini" }
+        - not: { hasFile: "**/LogicMods/**" }
+    assert: { matched: sml-mod }
+
+  - id: ue4ss-cpp-validator
+    name: UE4SS C++ mods (dlls/main.dll, no lua, enabled.txt or loader) match ue4ss-cpp
+    when:
+      all:
+        - { hasFile: "**/dlls/main.dll" }
+        - not: { hasFile: "**/Scripts/*.lua" }
+        - not: { hasFile: "**/enabled.txt" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "**/*/*.uplugin" }
+        - not: { hasFile: "**/FactoryGame/**" }
+        - not: { hasFile: "**/Engine/**" }
+        - not: { hasFile: "Content/**" }
+        - not: { hasFile: "Config/**" }
+        - not: { hasFile: "Binaries/**" }
+        - not: { hasFile: "Mods/**" }
+        - not: { hasFile: "**/ReShade.ini" }
+        - not: { hasFile: "**/{Engine.ini,engine.ini,Game.ini,game.ini,GameUserSettings.ini,gameusersettings.ini,Input.ini,input.ini,Scalability.ini,scalability.ini}" }
+        - not: { hasFile: "**/LogicMods/**" }
+    assert: { matched: ue4ss-cpp }
+
+  - id: reshade-preset-validator
+    name: Bare preset .ini archives (no UE config names, no payload) match reshade-preset
+    when:
+      all:
+        - { hasFile: "**/*.ini" }
+        - not: { hasFile: "**/{Engine.ini,engine.ini,Game.ini,game.ini,GameUserSettings.ini,gameusersettings.ini,Input.ini,input.ini,Scalability.ini,scalability.ini}" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "**/ReShade.ini" }
+        - not: { hasFile: "**/*.pak" }
+        - not: { hasFile: "**/*.utoc" }
+        - not: { hasFile: "**/*.uplugin" }
+        - not: { hasFile: "**/*.{dll,addon64,addon}" }
+        - not: { hasFile: "**/*.lua" }
+        - not: { hasFile: "**/FactoryGame/**" }
+        - not: { hasFile: "**/Engine/**" }
+        - not: { hasFile: "**/Binaries/**" }
+        - not: { hasFile: "Content/**" }
+        - not: { hasFile: "Config/**" }
+        - not: { hasFile: "Mods/**" }
+    assert: { matched: reshade-preset }
+
+  - id: logicmods-validator
+    name: LogicMods paks (not loader / game- or project-relative trees) match logicmods
+    when:
+      all:
+        - { hasFile: "**/LogicMods/**/*.pak" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "**/FactoryGame/**" }
+        - not: { hasFile: "**/Engine/**" }
+        - not: { hasFile: "Content/**" }
+        - not: { hasFile: "Config/**" }
+        - not: { hasFile: "Binaries/**" }
+        - not: { hasFile: "Mods/**" }
+        - not: { hasFile: "**/ReShade.ini" }
+        - not: { hasFile: "**/*.ini" }
+    assert: { matched: logicmods }
+
+  - id: config-validator
+    name: Bare Engine.ini archives (no payload) match config-ini
+    when:
+      all:
+        - { hasFile: "**/{Engine.ini,engine.ini}" }
+        - not: { hasFile: "**/{dwmapi.dll,xinput1_3.dll,xinput1_4.dll,UE4SS-settings.ini}" }
+        - not: { hasFile: "**/ReShade.ini" }
+        - not: { hasFile: "**/*.pak" }
+        - not: { hasFile: "**/*.utoc" }
+        - not: { hasFile: "**/*.uplugin" }
+        - not: { hasFile: "**/*.{dll,addon64,addon}" }
+        - not: { hasFile: "**/*.lua" }
+        - not: { hasFile: "**/FactoryGame/**" }
+        - not: { hasFile: "**/Engine/**" }
+        - not: { hasFile: "Content/**" }
+        - not: { hasFile: "Config/**" }
+        - not: { hasFile: "Binaries/**" }
+        - not: { hasFile: "Mods/**" }
+    assert: { matched: config-ini }
+
+  # Placement guard: non-SML IoStore/pak payloads must land under Content/Paks, never loose
+  # at the game root, where UE ignores them. SML plugin archives (**/*/*.uplugin) are
+  # checked separately by sml-payload-placement below because SML paks deploy under
+  # FactoryGame/Mods/<Mod>/ (which may or may not have a Content/Paks/ subfolder).
+  - id: pak-payload-placement
+    name: Non-SML .pak/.ucas/.utoc install under Content/Paks, never at the game root
+    when:
+      all:
+        - { hasFile: "**/*.{pak,ucas,utoc}" }
+        - not: { hasFile: "**/*/*.uplugin" }
+    assert:
+      placement:
+        - files: "**/*.{pak,ucas,utoc}"
+          mustMatch: "**/Content/Paks/**"
+          mustNotMatch: "${installPath}/*"
+
+  - id: sml-payload-placement
+    name: SML plugin .uplugin and payloads install under FactoryGame/Mods, never at the game root
+    when: { hasFile: "**/*/*.uplugin" }
+    assert:
+      placement:
+        - files: "**/*.uplugin"
+          mustMatch: "**/FactoryGame/Mods/**"
+          mustNotMatch: "${installPath}/*"
+
+tests:
+  corpus: nexus
+  cases:
+    # Satisfactory mod 49 (OP Taser): IoStore pak triplet flattened into FactoryGame/Content/Paks/~mods.
+    - name: "Satisfactory pak: OP Taser pak triplet flattens into ~mods"
+      archive:
+        - OPTaser_P.pak
+        - OPTaser_P.ucas
+        - OPTaser_P.utoc
+      expect:
+        matched: pak
+        modType: satisfactory-pak
+        plan:
+          - ${installPath}/FactoryGame/Content/Paks/~mods/OPTaser_P.pak
+          - ${installPath}/FactoryGame/Content/Paks/~mods/OPTaser_P.ucas
+          - ${installPath}/FactoryGame/Content/Paks/~mods/OPTaser_P.utoc
+
+    # Satisfactory mod 35 (ukrainian text localization): single localization pak into ~mods.
+    - name: "Satisfactory pak: localization .pak into ~mods"
+      archive:
+        - FactoryGame-Windows_ukr.pak
+      expect:
+        matched: pak
+        modType: satisfactory-pak
+        plan:
+          - ${installPath}/FactoryGame/Content/Paks/~mods/FactoryGame-Windows_ukr.pak
+
+    # Satisfactory mod 16 (Super Alternate Recipes): SML plugin folder with .uplugin + cooked pak.
+    - name: "Satisfactory sml-mod: SML plugin with .uplugin installs under FactoryGame/Mods"
+      archive:
+        - AlternateRecipes/AlternateRecipes.uplugin
+        - AlternateRecipes/Content/Paks/Windows/AlternateRecipes-Windows.pak
+        - AlternateRecipes/Content/Paks/Windows/AlternateRecipes-Windows.ucas
+        - AlternateRecipes/Content/Paks/Windows/AlternateRecipes-Windows.utoc
+      expect:
+        matched: sml-mod
+        modType: satisfactory-sml
+        plan:
+          - ${installPath}/FactoryGame/Mods/AlternateRecipes/AlternateRecipes.uplugin
+          - ${installPath}/FactoryGame/Mods/AlternateRecipes/Content/Paks/Windows/AlternateRecipes-Windows.pak
+          - ${installPath}/FactoryGame/Mods/AlternateRecipes/Content/Paks/Windows/AlternateRecipes-Windows.ucas
+          - ${installPath}/FactoryGame/Mods/AlternateRecipes/Content/Paks/Windows/AlternateRecipes-Windows.utoc
+
+    # GUARD: the sml-mod `unless` arm. A game-relative archive shipping FactoryGame/Mods/<Mod>/<Mod>.uplugin
+    # must stay with `root` so it isn't double-nested into FactoryGame/Mods/FactoryGame/Mods/.
+    - name: "sml-mod guard: game-relative FactoryGame/Mods tree stays with root"
+      archive:
+        - FactoryGame/Mods/TardisMod/TardisMod.uplugin
+        - FactoryGame/Mods/TardisMod/Paks/TardisMod-Windows.pak
+      expect:
+        matched: root
+        modType: satisfactory-root
+        plan:
+          - ${installPath}/FactoryGame/Mods/TardisMod/TardisMod.uplugin
+          - ${installPath}/FactoryGame/Mods/TardisMod/Paks/TardisMod-Windows.pak
+
+    # Satisfactory mod 33 (Industrial Drift Inc. ReShade): bare ReShade preset .ini lands in
+    # Engine/Binaries/Win64 beside FactoryGameSteam-Win64-Shipping.exe.
+    - name: "Satisfactory reshade-preset: bare preset .ini into Engine/Binaries/Win64"
+      archive:
+        - Industrial Drift Inc. ReShade.ini
+      expect:
+        matched: reshade-preset
+        modType: satisfactory-binaries
+        plan:
+          - ${installPath}/Engine/Binaries/Win64/Industrial Drift Inc. ReShade.ini
+
+    # Satisfactory mod 34 (No-Splash): game-relative splash image replacement under FactoryGame/.
+    - name: "Satisfactory root: splash replacement under FactoryGame/Content/Splash"
+      archive:
+        - FactoryGame/Content/Splash/Splash.bmp
+      expect:
+        matched: root
+        modType: satisfactory-root
+        plan:
+          - ${installPath}/FactoryGame/Content/Splash/Splash.bmp
+
+    # Satisfactory mod 48 (No-HUD-No-Effects): ShaderToggler addon + ini into Engine/Binaries/Win64.
+    - name: "Satisfactory native-dll: ShaderToggler addon + ini into Engine/Binaries/Win64"
+      archive:
+        - ShaderToggler.addon64
+        - ShaderToggler.ini
+      expect:
+        matched: native-dll
+        modType: satisfactory-binaries
+        plan:
+          - ${installPath}/Engine/Binaries/Win64/ShaderToggler.addon64
+          - ${installPath}/Engine/Binaries/Win64/ShaderToggler.ini
+
+    # UE4SS runtime lands beside the shipping exe in Engine/Binaries/Win64.
+    - name: "ue4ss-injector: stock UE4SS bundle into Engine/Binaries/Win64"
+      archive:
+        - dwmapi.dll
+        - README.txt
+        - ue4ss/UE4SS.dll
+        - ue4ss/UE4SS-settings.ini
+        - ue4ss/Mods/mods.txt
+        - ue4ss/Mods/BPModLoaderMod/Scripts/main.lua
+      expect:
+        matched: ue4ss-injector
+        modType: satisfactory-ue4ss-injector
+        plan:
+          - ${binariesPath}/dwmapi.dll
+          - ${binariesPath}/README.txt
+          - ${binariesPath}/ue4ss/UE4SS.dll
+          - ${binariesPath}/ue4ss/UE4SS-settings.ini
+          - ${binariesPath}/ue4ss/Mods/mods.txt
+          - ${binariesPath}/ue4ss/Mods/BPModLoaderMod/Scripts/main.lua
+
+    - name: "config-ini: bare Engine.ini to the user config dir"
+      archive:
+        - Engine.ini
+      expect:
+        matched: config-ini
+        modType: satisfactory-config
+        plan:
+          - ${configPath}/Engine.ini
+
+    - name: "config-ini: bare game.ini to the user config dir, not Binaries"
+      archive:
+        - game.ini
+      expect:
+        matched: config-ini
+        modType: satisfactory-config
+        plan:
+          - ${configPath}/game.ini
+
+    - name: "ue4ss-lua-enabled: enabled.txt + dll payload into ue4ss/Mods"
+      archive:
+        - ue4ss/Mods/SomeMod/enabled.txt
+        - ue4ss/Mods/SomeMod/dlls/main.dll
+        - README.txt
+      expect:
+        matched: ue4ss-lua-enabled
+        modType: satisfactory-ue4ss
+
+    - name: "ue4ss-cpp: dlls/main.dll mod without enabled.txt into ue4ss/Mods"
+      archive:
+        - ue4ss/Mods/SomeCppMod/dlls/config.ini
+        - ue4ss/Mods/SomeCppMod/dlls/main.dll
+      expect:
+        matched: ue4ss-cpp
+        modType: satisfactory-ue4ss
+        plan:
+          - ${ue4ssModsPath}/SomeCppMod/dlls/config.ini
+          - ${ue4ssModsPath}/SomeCppMod/dlls/main.dll
+
+    - name: "wrapped-root: wrapped tree with loader + pak keeps every file"
+      archive:
+        - ModWrapper_v1.0/README.txt
+        - ModWrapper_v1.0/Engine/Binaries/Win64/dsound.dll
+        - ModWrapper_v1.0/FactoryGame/Content/Paks/~mods/Mod_P.pak
+      expect:
+        matched: wrapped-root
+        modType: satisfactory-root
+        plan:
+          - README.txt
+          - Engine/Binaries/Win64/dsound.dll
+          - FactoryGame/Content/Paks/~mods/Mod_P.pak
+
+    - name: "pak: multiple numbered triplets flatten into ~mods"
+      archive:
+        - 010_first_P.pak
+        - 010_first_P.ucas
+        - 010_first_P.utoc
+        - 020_second_P.pak
+        - 020_second_P.ucas
+        - 020_second_P.utoc
+      expect:
+        matched: pak
+        modType: satisfactory-pak
+        plan:
+          - ${pakModsPath}/010_first_P.pak
+          - ${pakModsPath}/010_first_P.ucas
+          - ${pakModsPath}/010_first_P.utoc
+          - ${pakModsPath}/020_second_P.pak
+          - ${pakModsPath}/020_second_P.ucas
+          - ${pakModsPath}/020_second_P.utoc
+
+    # GUARD: reshade-preset must not steal an Engine.ini from config-ini.
+    - name: "reshade-preset guard: Engine.ini stays with config-ini"
+      archive:
+        - Engine.ini
+      expect:
+        matched: config-ini
+        modType: satisfactory-config
+
+    - name: "reshade: preset folder stripped into Binaries"
+      archive:
+        - WarmSun/ReShade.ini
+        - WarmSun/WarmSun.ini
+        - WarmSun/reshade-shaders/Shaders/Clarity.fx
+      expect:
+        matched: reshade
+        modType: satisfactory-binaries
+        plan:
+          - ${binariesPath}/ReShade.ini
+          - ${binariesPath}/WarmSun.ini
+          - ${binariesPath}/reshade-shaders/Shaders/Clarity.fx
+
+    - name: "native-dll: bare dll placed in Binaries"
+      archive:
+        - SomePlugin.dll
+      expect:
+        matched: native-dll
+        modType: satisfactory-binaries
+        plan:
+          - ${binariesPath}/SomePlugin.dll
+
+    - name: "ue4ss-lua: lua mod with Scripts folder"
+      archive:
+        - MyMod/Scripts/main.lua
+        - MyMod/enabled.txt
+      expect:
+        matched: ue4ss-lua
+        modType: satisfactory-ue4ss
+        plan:
+          - ${ue4ssModsPath}/MyMod/Scripts/main.lua
+          - ${ue4ssModsPath}/MyMod/enabled.txt
+
+    - name: "logicmods: paks under LogicMods/ folder"
+      archive:
+        - Pack/LogicMods/BPFolder/X.pak
+      expect:
+        matched: logicmods
+        modType: satisfactory-logicmods
+        plan:
+          - ${paksPath}/LogicMods/BPFolder/X.pak
+
+    - name: "config-ini: lowercase engine.ini in a named wrapper folder is stripped"
+      archive:
+        - Smooth Framerate/engine.ini
+        - Smooth Framerate/README.txt
+      expect:
+        matched: config-ini
+        modType: satisfactory-config
+        plan:
+          - ${configPath}/engine.ini
+          - ${configPath}/README.txt
+
+    # GUARD: the config-ini `unless: **/*.pak` arm.
+    - name: "config-ini guard: Engine.ini bundled WITH a pak keeps its pak routing"
+      archive:
+        - MyMod/Engine.ini
+        - MyMod/MyMod_P.pak
+      expect:
+        matched: pak
+        modType: satisfactory-pak
+        plan:
+          - ${pakModsPath}/MyMod_P.pak
+          - ${pakModsPath}/Engine.ini
+
+    # A .pak alongside .utoc/.ucas must route to `pak` (30), not `pak-iostore` (29).
+    - name: "pak: pak wins over pak-iostore when both present"
+      archive:
+        - Better Stacks/0_BetterStacks_P.pak
+        - Better Stacks/0_BetterStacks_P.ucas
+        - Better Stacks/0_BetterStacks_P.utoc
+      expect:
+        matched: pak
+        modType: satisfactory-pak
+        plan:
+          - ${pakModsPath}/0_BetterStacks_P.pak
+          - ${pakModsPath}/0_BetterStacks_P.ucas
+          - ${pakModsPath}/0_BetterStacks_P.utoc
+
+    - name: "pak-iostore: utoc+ucas without a pak"
+      archive:
+        - SomeMod/x_P.utoc
+        - SomeMod/x_P.ucas
+      expect:
+        matched: pak-iostore
+        modType: satisfactory-pak
+        plan:
+          - ${pakModsPath}/x_P.utoc
+          - ${pakModsPath}/x_P.ucas
+
+    - name: "pak-alt: bundled Paks/ folder → Content/Paks"
+      archive:
+        - mod/Paks/sub/x.pak
+        - mod/Paks/sub/x.ucas
+        - mod/Paks/sub/x.utoc
+      expect:
+        matched: pak-alt
+        modType: satisfactory-pakalt
+        plan:
+          - ${contentPath}/Paks/sub/x.pak
+          - ${contentPath}/Paks/sub/x.ucas
+          - ${contentPath}/Paks/sub/x.utoc
+
+    - name: "content-folder: Content/ at archive root"
+      archive:
+        - Content/Foo.uasset
+        - Content/Bar.uexp
+      expect:
+        matched: content-folder
+        modType: satisfactory-contentfolder
+        plan:
+          - ${gamePath}/Content/Foo.uasset
+          - ${gamePath}/Content/Bar.uexp
+
+    # GUARD: the ue4ss-injector `unless` arm. A game-relative archive shipping the loader AND
+    # a pak must go to `root`, or the pak outside Binaries/ is dropped (halo mod 68).
+    - name: "injector guard: game-relative loader + pak deploys intact via root"
+      archive:
+        - Engine/Binaries/Win64/dwmapi.dll
+        - Engine/Binaries/Win64/ue4ss/UE4SS-settings.ini
+        - FactoryGame/Content/Paks/~mods/Payload_P.pak
+      expect:
+        matched: root
+        modType: satisfactory-root
+        plan:
+          - ${installPath}/Engine/Binaries/Win64/dwmapi.dll
+          - ${installPath}/Engine/Binaries/Win64/ue4ss/UE4SS-settings.ini
+          - ${installPath}/FactoryGame/Content/Paks/~mods/Payload_P.pak
+
+    # GUARD: wrapped-root. Without it this archive matches nothing and installs zero files.
+    - name: "wrapped-root: game tree wrapped in a mod-name folder has the wrapper stripped"
+      archive:
+        - Cool Mod v2/FactoryGame/Content/Paks/~mods/Cool_P.pak
+        - Cool Mod v2/README.txt
+      expect:
+        matched: wrapped-root
+        modType: satisfactory-root
+        plan:
+          - README.txt
+          - FactoryGame/Content/Paks/~mods/Cool_P.pak
+
+    # GUARD: the converse. An unwrapped tree stays with `root`, or stripCommonRoot would eat
+    # the project-folder segment and deploy one level too high.
+    - name: "root still wins for an unwrapped tree (wrapped-root declines)"
+      archive:
+        - FactoryGame/Content/Paks/~mods/Cool_P.pak
+        - README.txt
+      expect:
+        matched: root
+        modType: satisfactory-root
+        plan:
+          - ${installPath}/FactoryGame/Content/Paks/~mods/Cool_P.pak
+          - ${installPath}/README.txt
