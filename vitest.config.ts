@@ -26,6 +26,10 @@ export default defineConfig({
     // repo with its own suites and must not be swept in here).
     include: [
       'games/*/.gdl-out/{tests,templates,lifecycle}.gen.ts',
+      // Hand-written unit tests for a game's src/hooks.ts (custom install hooks
+      // can't be exercised by the generated tests.gen.ts, which only plans
+      // declarative rules).
+      'games/*/src/**/*.test.ts',
       'tools/*.test.mjs',
     ],
     // A skeleton game (no `tests.cases`) generates no tests.gen.ts; don't fail then.

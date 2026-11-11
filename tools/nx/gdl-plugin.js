@@ -31,10 +31,11 @@ exports.createNodesV2 = [
                 // Tests run from the workspace root so vitest picks up the root
                 // vitest.config.ts (runtime aliases), filtered to this game's
                 // .gdl-out folder so ALL generated suites run (tests + templates
-                // + lifecycle), not just installer routing.
+                // + lifecycle), not just installer routing, plus any hand-written
+                // unit tests for the game's src/hooks.ts.
                 test: {
                   executor: 'nx:run-commands',
-                  options: { command: `vitest run ${root}/.gdl-out` },
+                  options: { command: `vitest run ${root}/.gdl-out ${root}/src` },
                 },
                 'test-corpus': {
                   executor: 'nx:run-commands',
