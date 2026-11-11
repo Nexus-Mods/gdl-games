@@ -1,5 +1,5 @@
 gdl: 1
-version: 0.0.1   # extension version: drives info.json, the release tag, and the zip name
+version: 1.1.0   # extension version: drives info.json, the release tag, and the zip name
 
 # Satisfactory (Coffee Stain Studios / Coffee Stain Publishing): first-person open-world
 # factory building game.
@@ -107,6 +107,13 @@ context:
   # Windows for UE5 Satisfactory 1.0+ via official support docs).
   configPath: ${appDataLocal}/FactoryGame/Saved/Config/Windows
 
+  # Satisfactory 1.0+ blueprints: <Name>.sbp + <Name>.sbpcfg pairs, read per save session from
+  # blueprints/<SessionName>/, same path on Steam and Epic (satisfactory.wiki.gg/wiki/Blueprint,
+  # "Save location", read 2026-11-11). Per the wiki, a session's folder only exists once at
+  # least one blueprint has been saved in that session, so the install hook can only see
+  # sessions the player has already made a blueprint in. Not yet checked on a real install.
+  blueprintsPath: ${appDataLocal}/FactoryGame/Saved/SaveGames/blueprints
+
 modTypes:
   # Rename freely until the first release. After that these ids are permanent (rule 6 in
   # CLAUDE.md): Vortex stores the id against every installed mod.
@@ -131,11 +138,34 @@ modTypes:
   # rejection to a warning. See docs/deployment-methods.md.
   - { id: satisfactory-config,         name: "Config (Engine.ini tweaks)", path: "${configPath}",
       deploymentEssential: false }
+  # Off the game drive like satisfactory-config, so deploymentEssential: false for the same
+  # reason. For a game on another drive this type still can't deploy (EXDEV): symlinks are
+  # refused for IoStore, and hardlink/move need one volume. Say so in the release notes.
+  - { id: satisfactory-blueprint,      name: "Blueprints (per save session)", path: "${blueprintsPath}",
+      deploymentEssential: false }
 
 # The ladder below follows games/phantombladezero's UE5 rules with the project folder set to
 # FactoryGame, plus sml-mod (priority 21) for SML plugin packages shipping a .uplugin file
 # (Nexus mods 16 and 46).
 installers:
+  # --- Priority 14: Blueprints (.sbp/.sbpcfg) → every session under SaveGames/blueprints ---
+  # The target folder depends on the user's save session names, which YAML can't know, so a
+  # hook (src/hooks.ts installBlueprints) lists the session folders at install time and copies
+  # every blueprint into each one. Ahead of `root` (16) so an archive laid out from
+  # %LOCALAPPDATA% (FactoryGame/Saved/SaveGames/blueprints/...) isn't sent to the install dir.
+  # .cbp "megaprints" are for the external SCIM web calculator and stay unmatched.
+  - id: blueprint
+    priority: 14
+    when: { hasFile: "**/*.sbp" }
+    unless:
+      any:
+        - { hasFile: "**/*.{pak,ucas,utoc}" }
+        - { hasFile: "**/*.uplugin" }
+        - { hasFile: "**/*.{dll,addon64,addon}" }
+        - { hasFile: "**/*.lua" }
+    install: { hook: installBlueprints }
+    modType: satisfactory-blueprint
+
   # --- Priority 15: UE4SS loader (dwmapi/xinput proxy or UE4SS-settings.ini) → Binaries ---
   # The `unless` is load-bearing: `take: parent` resolves the install root to
   # the loader's folder and drops every file outside it, so a game-relative archive
@@ -445,12 +475,13 @@ toolbarActions:
     priority: 201
     target: { openUrl: "https://www.nexusmods.com/satisfactory" }
 
-# nexus: block omitted until the Vortex extension page on nexusmods.com/site is created
-# and its modId + fileGroupId are known (gdl/README.md → Releasing). At release, add:
-#   nexus:
-#     modId: <from nexusmods.com/site>
-#     fileGroupId: <from the Nexus upload page>
-#     displayName: Satisfactory Support for Vortex
+# fileGroupId is the group of the current main file (fileId 12866, "Satisfactory Vortex
+# V1.0.0", categoryId 1), not group 8358363 of the archived V0.0.1 upload (fileId 12865,
+# categoryId 7). Both read from v2 GraphQL modFiles on 2026-11-11.
+nexus:
+  modId: 2581            # nexusmods.com/site/mods/2581 (the Vortex extension page)
+  fileGroupId: 8358453
+  displayName: Satisfactory Support for Vortex
 
 # ---------------------------------------------------------------------------------------
 # CORPUS STATE (2026-11-10): 30 published mods on nexusmods.com/satisfactory (confirmed via
@@ -465,11 +496,12 @@ toolbarActions:
 #       - mod 33 (Industrial Drift Inc. ReShade): ReShade preset → reshade / reshade-preset
 #       - mod 34 (No-Splash): splash replacement → root / wrapped-root
 #       - mod 48 (No-HUD-No-Effects): ShaderToggler ReShade addon + ini → native-dll / root
-#   * 21 uploads are non-mod-manager content (intentionally unmatched per
-#     docs/corpus-manifests.md; 9 + 21 = 30 total):
-#       - 12 Blueprint packs (.sbp/.sbpcfg for per-session SaveGames/blueprints/<sessionName>/,
-#         or .cbp megaprints for the external SCIM web calculator): mods 18, 19, 22, 27, 28,
-#         29, 31, 32, 39, 44, 45, 55.
+#   * 12 Blueprint packs: mods 18, 19, 22, 27, 28, 29, 31, 32, 39, 44, 45, 55. Those shipping
+#     .sbp/.sbpcfg route to `blueprint` (since 1.1.0); any that ship only .cbp megaprints for
+#     the external SCIM web calculator stay unmatched. Per-mod split not yet confirmed: needs
+#     a corpus run with NEXUS_API_KEY.
+#   * 9 uploads are non-mod-manager content (intentionally unmatched per
+#     docs/corpus-manifests.md):
 #       - 6 Save files (.sav): mods 21, 24, 36, 41, 43, 47.
 #       - 3 Standalone tools / external scripts: mod 30 (PowerShell screenshot script),
 #         mod 38 (Cheat Engine .CT table), mod 52 (Satisfactory Planner standalone app).
@@ -627,6 +659,26 @@ validators:
 tests:
   corpus: nexus
   cases:
+    # The `blueprint` installer is a hook (unit-tested in src/hooks.test.ts), which these
+    # generated cases can't plan. These pin that its `unless` arms hand real payload back to
+    # the payload's rule even when a blueprint ships alongside.
+    - name: "blueprint guard: a pak bundled with an .sbp keeps its pak routing"
+      archive:
+        - Showcase/Showcase_P.pak
+        - Showcase/Showcase.sbp
+      expect:
+        matched: pak
+        modType: satisfactory-pak
+
+    - name: "blueprint guard: an SML plugin bundled with an .sbp stays with sml-mod"
+      archive:
+        - AlternateRecipes/AlternateRecipes.uplugin
+        - AlternateRecipes/Content/Paks/Windows/AlternateRecipes-Windows.pak
+        - AlternateRecipes/Extras/Demo.sbp
+      expect:
+        matched: sml-mod
+        modType: satisfactory-sml
+
     # Satisfactory mod 49 (OP Taser): IoStore pak triplet flattened into FactoryGame/Content/Paks/~mods.
     - name: "Satisfactory pak: OP Taser pak triplet flattens into ~mods"
       archive:
